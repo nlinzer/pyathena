@@ -199,8 +199,8 @@ class LoadSim(object):
                              ('athinput.*',), # Chang-Goo's restart
                              ('*.par',)]
         
-        hst_patterns = [('id0', '*.hst'),
-                        ('hst', '*.hst'),
+        hst_patterns = [('hst', '*.hst'),
+                        ('id0', '*.hst'),
                         ('*.hst',)]
         
         vtk_patterns = [('vtk', '*.????.vtk'),

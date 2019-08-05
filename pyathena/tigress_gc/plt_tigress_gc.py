@@ -9,72 +9,101 @@ import os
 import time
 import os.path as osp
 import matplotlib as mpl
+import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
+import xarray as xr
 from astropy import units as au
 
 from ..classic.cooling import coolftn
 from ..io.read_hst import read_hst
+from ..io.read_starpar_vtk import read_starpar_vtk
+from ..util.units import Units
+
+def mass_norm(mass):
+    '''
+    Mass normlization function to determine symbol size
+    This should be called both in sp_plot and sp_legend for the consistent result
+    '''
+    return np.sqrt(mass/300.)
 
 def plt_proj_density(s, num, fig, savfig=True):
     """
     Create density projection
     """
-    ax = fig.add_subplot(111)
 
+    # create axes
+    gs = GridSpec(1,3,figure=fig)
+    ax1 = fig.add_subplot(gs[0:2])
+    ax2 = fig.add_subplot(gs[2])
+    cax1 = make_axes_locatable(ax1).append_axes('right', size='2.5%', pad=0.05)
+    cax2 = make_axes_locatable(ax2).append_axes('right', size='5%', pad=0.05)
+
+    # load vtk and hst files
     ds = s.load_vtk(num=num)
-    dat = ds.get_field(field='density', as_xarray=True)
-    dat['surface_density'] = (dat['density']*s.u.Msun/s.u.pc**3
-            *ds.domain['dx'][2]*s.u.pc).sum(dim='z')
-    dat['surface_density'].plot.imshow(ax=ax, norm=mpl.colors.LogNorm(),
-            cmap='pink_r', vmin=1e0, vmax=1e4)
-    ax.set_aspect('equal')
-    fig.suptitle('{0:s}, time: {1:.1f} Myr'.format(s.name, ds.domain['time']*s.u.Myr))
-    
+    dat = ds.get_field(field=['density'], as_xarray=True)
+    sp = read_starpar_vtk(s.files['starpar'][num])
+    time = ds.domain['time']*s.u.Myr
+    axis_idx = dict(x=0, y=1, z=2)
+
+    # prepare variables to be plotted
+    dat['surface_density_xy'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='z')*s.u.Msun/s.u.pc**2
+    dat['surface_density_xz'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='y')*s.u.Msun/s.u.pc**2
+
+    # plot
+
+    # gas
+    dat['surface_density_xy'].plot.imshow(ax=ax1, norm=mpl.colors.LogNorm(),
+            cmap='pink_r', vmin=1e0, vmax=1e4, cbar_ax=cax1)
+    dat['surface_density_xz'].plot.imshow(ax=ax2, norm=mpl.colors.LogNorm(),
+            cmap='pink_r', vmin=1e-2, vmax=1e5, cbar_ax=cax2)
+
+    # starpar
+    young_sp = sp[sp['age']*s.u.Myr < 40.]
+    young_cluster = young_sp[young_sp['mass'] != 0]
+    mass = young_cluster['mass']*s.u.Msun
+    age = young_cluster['age']*s.u.Myr
+    cl = ax1.scatter(young_cluster['x1'], young_cluster['x2'], marker='o',
+                     s=mass_norm(mass), c=age, edgecolor='black', linewidth=1,
+                     vmax=40, vmin=0, cmap=plt.cm.cool_r, zorder=2, alpha=0.5)
+    ax2.scatter(young_cluster['x1'], young_cluster['x3'], marker='o',
+                s=mass_norm(mass), c=age, edgecolor='black', linewidth=1,
+                vmax=40, vmin=0, cmap=plt.cm.cool_r, zorder=2, alpha=0.5)
+    ss=[]
+    label=[]
+    ext = ax1.images[0].get_extent()
+    for mass in [1e4,1e5,1e6]:
+        ss.append(ax1.scatter(ext[1]*2,ext[3]*2,s=mass_norm(mass),color='k',alpha=.5))
+        label.append(r'$10^%d M_\odot$' % np.log10(mass))
+    ax1.set_xlim(ext[0], ext[1])
+    ax1.set_ylim(ext[3], ext[2])
+    ax1.legend(ss,label,scatterpoints=1,loc=2,ncol=3,bbox_to_anchor=(-0.1, 1.065), frameon=False)
+
+    cax = fig.add_axes([0.15,0.93,0.25,0.015])
+    cbar = plt.colorbar(cl, ticks=[0,20,40], cax=cax, orientation='horizontal')
+    cbar.ax.set_title(r'$age\,[\rm Myr]$')
+
+    for ax in [ax1,ax2]:
+        ax.set_aspect('equal')
+
+    # figure annotations
+    fig.suptitle('{0:s}, time: {1:.1f} Myr'.format(s.basename, time), fontsize=30, x=.55, y=.93)
+
     if savfig:
-        savdir = osp.join('./figures-proj')
+        savdir = osp.join('./figures-all')
         if not os.path.exists(savdir):
             os.makedirs(savdir)
         fig.savefig(osp.join(savdir, 'proj-density.{0:s}.{1:04d}.png'
-            .format(s.name, ds.num)),bbox_inches='tight')
+            .format(s.basename, ds.num)),bbox_inches='tight')
 
 def plt_all(s, num, fig, savfig=True):
     """
     Create large plot including density slice, density projection, temperature
     slice, phase diagram, star formation rate, and mass fractions.
     """
-    # load vtk and hst files
-    ds = s.load_vtk(num=num)
-    dat = ds.get_field(field=['density','pressure'], as_xarray=True)
-    hst = read_hst(s.files['hst'])
-    time = ds.domain['time']*s.u.Myr
-    axis_idx = dict(x=0, y=1, z=2)
-    
-    # prepare variables to be plotted
-    mH = (1.00784*au.u).cgs.value
-    dat['nH'] = (dat['density']*s.u.density.value)/(s.u.muH*mH)
-    dat['pok'] = dat['pressure']*s.u.pok
-    # T_1 = (p/k) / (rho m_p) is the temperature assuming mu=1
-    # TODO dat['temperature'] should be computed from the tabulated mu.
-    dat['T1'] = dat['pok']/(dat['nH']*s.u.muH)
-    dat['surface_density_xy'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='z')*s.u.Msun/s.u.pc**2
-    dat['surface_density_xz'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='y')*s.u.Msun/s.u.pc**2
 
-    vol = (ds.domain['Lx'][0]*ds.domain['Lx'][1]*ds.domain['Lx'][2])
-    hst['time'] *= s.u.Myr
-    hst['mass'] *= (vol*s.u.Msun)
-    hst['Mw'] *= (vol*s.u.Msun)
-    hst['Mu'] *= (vol*s.u.Msun)
-    hst['Mc'] *= (vol*s.u.Msun)
-    hst['msp'] *= (vol*s.u.Msun)
-    hst['sfr10'] *= (ds.domain['Lx'][axis_idx['x']]
-            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
-    hst['sfr40'] *= (ds.domain['Lx'][axis_idx['x']]
-            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
-    hst['sfr100'] *= (ds.domain['Lx'][axis_idx['x']]
-            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
-
+    # create axes
     gs = GridSpec(3,5,figure=fig)
     ax1 = fig.add_subplot(gs[0,0])
     ax2 = fig.add_subplot(gs[1:,0], sharex=ax1)
@@ -93,6 +122,42 @@ def plt_all(s, num, fig, savfig=True):
     cax5 = make_axes_locatable(ax5).append_axes('right', size='5%', pad=0.05)
     cax6 = make_axes_locatable(ax6).append_axes('right', size='5%', pad=0.05)
 
+    # load vtk and hst files
+    ds = s.load_vtk(num=num)
+    dat = ds.get_field(field=['density','pressure'], as_xarray=True)
+    hst = read_hst(s.files['hst'])
+    sp = read_starpar_vtk(s.files['starpar'][num])
+    time = ds.domain['time']*s.u.Myr
+    axis_idx = dict(x=0, y=1, z=2)
+    
+    # prepare variables to be plotted
+    mH = (1.00784*au.u).cgs.value
+    dat['nH'] = (dat['density']*s.u.density.value)/(s.u.muH*mH)
+    dat['pok'] = dat['pressure']*s.u.pok
+    # T_1 = (p/k) / (rho m_p) is the temperature assuming mu=1
+    dat['T1'] = dat['pok']/(dat['nH']*s.u.muH)
+    dat['temperature'] = xr.DataArray(coolftn().get_temp(dat['T1'].values),
+                                      coords=dat['T1'].coords, dims=dat['T1'].dims)
+    dat['surface_density_xy'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='z')*s.u.Msun/s.u.pc**2
+    dat['surface_density_xz'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='y')*s.u.Msun/s.u.pc**2
+
+    vol = (ds.domain['Lx'][0]*ds.domain['Lx'][1]*ds.domain['Lx'][2])
+    hst['time'] *= s.u.Myr
+    hst['mass'] *= (vol*s.u.Msun)
+    hst['Mw'] *= (vol*s.u.Msun)
+    hst['Mu'] *= (vol*s.u.Msun)
+    hst['Mc'] *= (vol*s.u.Msun)
+    hst['msp'] *= (vol*s.u.Msun)
+    hst['sfr10'] *= (ds.domain['Lx'][axis_idx['x']]
+            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
+    hst['sfr40'] *= (ds.domain['Lx'][axis_idx['x']]
+            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
+    hst['sfr100'] *= (ds.domain['Lx'][axis_idx['x']]
+            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
+
+    # plot
+
+    # gas
     (dat['nH'].interp(z=0)).plot.imshow(ax=ax1, norm=mpl.colors.LogNorm(),
             cmap='viridis', vmin=1e0, vmax=1e4, cbar_ax=cax1)
     (dat['nH'].interp(y=0)).plot.imshow(ax=ax2, norm=mpl.colors.LogNorm(),
@@ -101,18 +166,42 @@ def plt_all(s, num, fig, savfig=True):
             cmap='pink_r', vmin=1e0, vmax=1e4, cbar_ax=cax3)
     dat['surface_density_xz'].plot.imshow(ax=ax4, norm=mpl.colors.LogNorm(),
             cmap='pink_r', vmin=1e-2, vmax=1e5, cbar_ax=cax4)
-    (dat['T1'].interp(z=0)).plot.imshow(ax=ax5, norm=mpl.colors.LogNorm(),
+    (dat['temperature'].interp(z=0)).plot.imshow(ax=ax5, norm=mpl.colors.LogNorm(),
             cmap='coolwarm', vmin=1e1, vmax=1e7, cbar_ax=cax5)
-    (dat['T1'].interp(y=0)).plot.imshow(ax=ax6, norm=mpl.colors.LogNorm(),
+    (dat['temperature'].interp(y=0)).plot.imshow(ax=ax6, norm=mpl.colors.LogNorm(),
             cmap='coolwarm', vmin=1e1, vmax=1e7, cbar_ax=cax6)
+
+    # starpar
+    young_sp = sp[sp['age']*s.u.Myr < 40.]
+    young_cluster = young_sp[young_sp['mass'] != 0]
+    mass = young_cluster['mass']*s.u.Msun
+    age = young_cluster['age']*s.u.Myr
+    cl = ax3.scatter(young_cluster['x1'], young_cluster['x2'], marker='o',
+                     s=mass_norm(mass), c=age, edgecolor='black', linewidth=1,
+                     vmax=40, vmin=0, cmap=plt.cm.cool_r, zorder=2)
+    ss=[]
+    label=[]
+    ext = ax3.images[0].get_extent()
+    for mass in [1e4,1e5,1e6]:
+        ss.append(ax3.scatter(ext[1]*2,ext[3]*2,s=mass_norm(mass),color='k',alpha=.5))
+        label.append(r'$10^%d M_\odot$' % np.log10(mass))
+    ax3.set_xlim(ext[0], ext[1])
+    ax3.set_ylim(ext[3], ext[2])
+    ax3.legend(ss,label,scatterpoints=1,loc=2,ncol=3,bbox_to_anchor=(0.0, 1.2), frameon=False)
+
+    cax = fig.add_axes([0.15,0.93,0.25,0.015])
+    cbar = plt.colorbar(cl, ticks=[0,20,40], cax=cax, orientation='horizontal')
+    cbar.ax.set_title(r'$age\,[\rm Myr]$')
+
+    # phase diagram
     histnP,xedgnP,yedgnP = np.histogram2d(
             np.log10(np.array(dat['nH']).flatten()),
-            np.log10(np.array(dat['pok']).flatten()), bins=100,
+            np.log10(np.array(dat['pok']).flatten()), bins=200,
             range=[[-3,5],[2,8]],density=True,
             weights=np.array(dat['nH']).flatten())
     histnT,xedgnT,yedgnT = np.histogram2d(
             np.log10(np.array(dat['nH']).flatten()),
-            np.log10(np.array(dat['T1']).flatten()), bins=100,
+            np.log10(np.array(dat['temperature']).flatten()), bins=200,
             range=[[-3,5],[1,7]],density=True,
             weights=np.array(dat['nH']).flatten())
     ax7.imshow(histnP.T, origin='lower', norm=mpl.colors.LogNorm(),
@@ -124,6 +213,7 @@ def plt_all(s, num, fig, savfig=True):
     ax8.set_xlabel(r'$n_{\rm H}\,[{\rm cm}^{-3}]$')
     ax8.set_ylabel(r'$T\,[{\rm K}]$')
 
+    # history
     ax9.semilogy(hst['time'], hst['sfr10'], 'r-', label='sfr10')
     ax9.semilogy(hst['time'], hst['sfr40'], 'g-', label='sfr40')
     ax9.semilogy(hst['time'], hst['sfr100'], 'm-', label='sfr100')
@@ -132,7 +222,6 @@ def plt_all(s, num, fig, savfig=True):
     ax9.set_ylim(1e-1,1e1)
     ax9.plot([time,time],[1e-1,1e1],'y-',lw=5)
     ax9.legend()
-
     ax10.semilogy(hst['time'], hst['Mc'], 'b-', label=r"$M_c$")
     ax10.semilogy(hst['time'], hst['Mu'], 'g-', label=r"$M_u$")
     ax10.semilogy(hst['time'], hst['Mw'], 'r-', label=r"$M_w$")
@@ -147,14 +236,91 @@ def plt_all(s, num, fig, savfig=True):
     for ax in [ax1,ax2,ax3,ax4,ax5,ax6]:
         ax.set_aspect('equal')
 
-    fig.suptitle('{0:s}, time: {1:.1f} Myr'.format(s.name, time), fontsize=30, x=.5, y=.93)
+    # figure annotations
+    fig.suptitle('{0:s}, time: {1:.1f} Myr'.format(s.basename, time), fontsize=30, x=.5, y=.93)
     
     if savfig:
         savdir = osp.join('./figures-all')
         if not os.path.exists(savdir):
             os.makedirs(savdir)
         fig.savefig(osp.join(savdir, 'all.{0:s}.{1:04d}.png'
-            .format(s.name, ds.num)),bbox_inches='tight')
+            .format(s.basename, ds.num)),bbox_inches='tight')
+
+def plt_history(s, fig, savfig=True):
+    """
+    Create history plot.
+    """
+    # create axes
+    gs = GridSpec(4,1,figure=fig,hspace=0)
+    ax1 = fig.add_subplot(gs[0])
+    ax2 = fig.add_subplot(gs[1], sharex=ax1)
+    ax3 = fig.add_subplot(gs[2], sharex=ax1)
+    ax4 = fig.add_subplot(gs[3], sharex=ax1)
+
+    # load vtk and hst files
+    ds = s.load_vtk(num=0)
+    hst = read_hst(s.files['hst'])
+    axis_idx = dict(x=0, y=1, z=2)
+
+    # prepare variables to be plotted
+    vol = (ds.domain['Lx'][0]*ds.domain['Lx'][1]*ds.domain['Lx'][2])
+    hst['time'] *= s.u.Myr
+    hst['mass'] *= (vol*s.u.Msun)
+    hst['Mw'] *= (vol*s.u.Msun)
+    hst['Mu'] *= (vol*s.u.Msun)
+    hst['Mc'] *= (vol*s.u.Msun)
+    hst['msp'] *= (vol*s.u.Msun)
+    hst['sfr1'] *= (ds.domain['Lx'][axis_idx['x']]
+            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
+    hst['sfr5'] *= (ds.domain['Lx'][axis_idx['x']]
+            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
+    hst['sfr10'] *= (ds.domain['Lx'][axis_idx['x']]
+            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
+    hst['sfr40'] *= (ds.domain['Lx'][axis_idx['x']]
+            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
+    KE = (hst['x1KE_2p']+hst['x2KE_2p']+hst['x3KE_2p'])*vol*s.u.Msun*s.u.kms**2
+    M2p = hst['Mw']+hst['Mu']+hst['Mc']
+    hst['veldisp'] = np.sqrt(2*KE/M2p)
+    hst['Hc'] = np.sqrt(hst['H2w']*vol*s.u.pc**2/hst['Mc'])
+    hst['Hu'] = np.sqrt(hst['H2w']*vol*s.u.pc**2/hst['Mu'])
+    hst['Hw'] = np.sqrt(hst['H2w']*vol*s.u.pc**2/hst['Mw'])
+
+    # plot
+
+    # history
+    ax1.semilogy(hst['time'], hst['sfr1'], 'r-', label='sfr1')
+    ax1.semilogy(hst['time'], hst['sfr5'], 'g-', label='sfr5')
+    ax1.semilogy(hst['time'], hst['sfr10'], 'b-', label='sfr10')
+    ax1.semilogy(hst['time'], hst['sfr40'], 'm-', label='sfr40')
+    ax1.set_ylabel("SFR ["+r"$M_\odot\,{\rm yr}^{-1}$"+"]")
+    ax1.set_ylim(1e-1,1e1)
+    ax1.legend()
+    ax2.semilogy(hst['time'], hst['Mc'], 'b-', label=r"$M_c$")
+    ax2.semilogy(hst['time'], hst['Mu'], 'g-', label=r"$M_u$")
+    ax2.semilogy(hst['time'], hst['Mw'], 'r-', label=r"$M_w$")
+    ax2.semilogy(hst['time'], hst['mass'], 'k-', label=r"$M_{\rm tot}$")
+    ax2.semilogy(hst['time'], hst['msp'], 'k--', label=r"$M_{\rm sp}$")
+    ax2.set_ylabel("mass ["+r"${M_\odot}$"+"]")
+    ax2.set_ylim(1e6,1e8)
+    ax2.legend()
+    ax3.semilogy(hst['time'], hst['veldisp'], 'k-')
+    ax3.set_ylabel("velocity dispersion ["+r"${\rm km/s}$"+"]")
+    ax4.semilogy(hst['time'], hst['Hc'], 'b-', label=r"$M_c$")
+    ax4.semilogy(hst['time'], hst['Hu'], 'g-', label=r"$M_u$")
+    ax4.semilogy(hst['time'], hst['Hw'], 'r-', label=r"$M_w$")
+    ax4.set_xlabel("time ["+r"${\rm Myr}$"+"]")
+    ax4.set_ylabel("scale height ["+r"${\rm pc}$"+"]")
+    ax4.legend()
+
+    # figure annotations
+    fig.suptitle('{0:s}'.format(s.basename), fontsize=30, x=.5, y=.93)
+    
+    if savfig:
+        savdir = osp.join('./figures-all')
+        if not os.path.exists(savdir):
+            os.makedirs(savdir)
+        fig.savefig(osp.join(savdir, 'history.{0:s}.png'
+            .format(s.basename)),bbox_inches='tight')
 
 def mass_flux(s, fig):
     """
