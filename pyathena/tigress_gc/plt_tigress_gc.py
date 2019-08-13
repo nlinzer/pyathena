@@ -281,9 +281,9 @@ def plt_history(s, fig, savfig=True):
     KE = (hst['x1KE_2p']+hst['x2KE_2p']+hst['x3KE_2p'])*vol*s.u.Msun*s.u.kms**2
     M2p = hst['Mw']+hst['Mu']+hst['Mc']
     hst['veldisp'] = np.sqrt(2*KE/M2p)
-    hst['Hc'] = np.sqrt(hst['H2w']*vol*s.u.pc**2/hst['Mc'])
-    hst['Hu'] = np.sqrt(hst['H2w']*vol*s.u.pc**2/hst['Mu'])
-    hst['Hw'] = np.sqrt(hst['H2w']*vol*s.u.pc**2/hst['Mw'])
+    hst['Hc'] = np.sqrt(hst['H2c']*vol*s.u.Msun*s.u.pc**2/hst['Mc'])
+    hst['Hu'] = np.sqrt(hst['H2u']*vol*s.u.Msun*s.u.pc**2/hst['Mu'])
+    hst['Hw'] = np.sqrt(hst['H2w']*vol*s.u.Msun*s.u.pc**2/hst['Mw'])
 
     # plot
 
