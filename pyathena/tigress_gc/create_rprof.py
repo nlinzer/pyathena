@@ -47,13 +47,13 @@ def _transform_to_Rz(dat, Redges):
         notnull = arr.notnull()
         Hc = np.sqrt(wmean(arr, dat['density'].where(notnull), dim=['x','y','z']))
 
-        dat = dat.where(mask).mean(dim=['x','y']).expand_dims(dim={'R':Rbins[i:i+1]})
-        dat = dat.assign(H=H.expand_dims('R'))
-        dat = dat.assign(Hw=Hw.expand_dims('R'))
-        dat = dat.assign(Hu=Hu.expand_dims('R'))
-        dat = dat.assign(Hc=Hc.expand_dims('R'))
+        datRz = dat.where(mask).mean(dim=['x','y']).expand_dims(dim={'R':Rbins[i:i+1]})
+        datRz = datRz.assign(H=H.expand_dims('R'))
+        datRz = datRz.assign(Hw=Hw.expand_dims('R'))
+        datRz = datRz.assign(Hu=Hu.expand_dims('R'))
+        datRz = datRz.assign(Hc=Hc.expand_dims('R'))
 
-        newdat.append(dat)
+        newdat.append(datRz)
 
     newdat = xr.merge(newdat)
     return newdat
