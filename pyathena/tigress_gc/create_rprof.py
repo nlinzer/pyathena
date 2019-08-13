@@ -53,7 +53,7 @@ def _transform_to_Rz(dat, Redges):
         dat = dat.assign(Hu=Hu.expand_dims('R'))
         dat = dat.assign(Hc=Hc.expand_dims('R'))
 
-        newdat.append(dat.where(mask).mean(dim=['x','y']).expand_dims(dim={'R':Rbins[i:i+1]}))
+        newdat.append(dat)
 
     newdat = xr.merge(newdat)
     return newdat
