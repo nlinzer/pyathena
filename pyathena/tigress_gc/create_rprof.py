@@ -9,6 +9,20 @@ from pyathena.classic.cooling import coolftn
 from pyathena.util.wmean import wmean
 
 def _transform_to_Rz(dat, Redges):
+    """
+    Caveat: Scale heights need a special treatment here.
+    """
+    # update phase information
+    cf = coolftn()
+    u = Units()
+    pok = dat['pressure']*u.pok
+    T1 = pok/(dat['density']*u.muH)
+    dat['temperature'] = xr.DataArray(cf.get_temp(T1.values), coords=T1.coords, dims=T1.dims)
+    Thot1, Twarm, Tcold = 2.e4, 5050, 184.
+    warm = (dat['temperature'] > Twarm)&(dat['temperature'] < Thot1)
+    unstable = (dat['temperature'] > Tcold)&(dat['temperature'] < Twarm)
+    cold = dat['temperature'] < Tcold
+
     Nr = len(Redges)-1
     dat['R'] = np.sqrt(dat.x**2+dat.y**2)
     newdat = []
@@ -16,7 +30,31 @@ def _transform_to_Rz(dat, Redges):
     for i in range(Nr):
         Rl, Rr = Redges[i], Redges[i+1]
         mask = (Rl < dat.R)&(dat.R < Rr)
+
+        arr = (dat.z**2).where(mask)
+        notnull = arr.notnull()
+        H = np.sqrt(wmean(arr, dat['density'].where(notnull), dim=['x','y','z']))
+
+        arr = (dat.z**2).where(warm&mask)
+        notnull = arr.notnull()
+        Hw = np.sqrt(wmean(arr, dat['density'].where(notnull), dim=['x','y','z']))
+
+        arr = (dat.z**2).where(unstable&mask)
+        notnull = arr.notnull()
+        Hu = np.sqrt(wmean(arr, dat['density'].where(notnull), dim=['x','y','z']))
+
+        arr = (dat.z**2).where(cold&mask)
+        notnull = arr.notnull()
+        Hc = np.sqrt(wmean(arr, dat['density'].where(notnull), dim=['x','y','z']))
+
+        dat = dat.where(mask).mean(dim=['x','y']).expand_dims(dim={'R':Rbins[i:i+1]})
+        dat = dat.assign(H=H.expand_dims('R'))
+        dat = dat.assign(Hw=Hw.expand_dims('R'))
+        dat = dat.assign(Hu=Hu.expand_dims('R'))
+        dat = dat.assign(Hc=Hc.expand_dims('R'))
+
         newdat.append(dat.where(mask).mean(dim=['x','y']).expand_dims(dim={'R':Rbins[i:i+1]}))
+
     newdat = xr.merge(newdat)
     return newdat
 
@@ -28,18 +66,19 @@ def create_rprof(s, num):
     # load vtk files
     ds = s.load_vtk(num=num)
     dat = ds.get_field(field=['density','velocity','pressure'], as_xarray=True)
-    # update phase information
-    cf = coolftn()
-    pok = dat['pressure']*s.u.pok
-    T1 = pok/(dat['density']*s.u.muH)
-    dat['temperature'] = xr.DataArray(cf.get_temp(T1.values), coords=T1.coords, dims=T1.dims)
-    Thot1, Twarm, Tcold = 2.e4, 5050, 184.
-    warm = (dat['temperature'] > Twarm)&(dat['temperature'] < Thot1)
-    unstable = (dat['temperature'] > Tcold)&(dat['temperature'] < Twarm)
-    cold = dat['temperature'] < Tcold
-    dat['z2w'] = (dat.z**2).where(warm)
-    dat['z2u'] = (dat.z**2).where(unstable)
-    dat['z2c'] = (dat.z**2).where(cold)
+
+#    # update phase information
+#    cf = coolftn()
+#    pok = dat['pressure']*s.u.pok
+#    T1 = pok/(dat['density']*s.u.muH)
+#    dat['temperature'] = xr.DataArray(cf.get_temp(T1.values), coords=T1.coords, dims=T1.dims)
+#    Thot1, Twarm, Tcold = 2.e4, 5050, 184.
+#    warm = (dat['temperature'] > Twarm)&(dat['temperature'] < Thot1)
+#    unstable = (dat['temperature'] > Tcold)&(dat['temperature'] < Twarm)
+#    cold = dat['temperature'] < Tcold
+#    dat['z2w'] = (dat.z**2).where(warm)
+#    dat['z2u'] = (dat.z**2).where(unstable)
+#    dat['z2c'] = (dat.z**2).where(cold)
 
     # transform from (x,y,z) to (R,z) coordinates (azimuthal average)
     Rmin, Rmax, dR = 0, 256, 10
@@ -51,10 +90,10 @@ def create_rprof(s, num):
     dat['Sigma_gas'] = ((dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='z')*s.u.Msun/s.u.pc**2)
     dat['Pth'] = dat['pressure'].interp(z=0)
     dat['Pturb'] = (dat['density']*dat['velocity3']**2).interp(z=0)
-    dat['H'] = np.sqrt(wmean(dat.z**2, dat['density'], dim=['z']))
-    dat['Hw'] = np.sqrt(wmean(dat['z2w'], dat['density'], dim=['z']))
-    dat['Hu'] = np.sqrt(wmean(dat['z2u'], dat['density'], dim=['z']))
-    dat['Hc'] = np.sqrt(wmean(dat['z2c'], dat['density'], dim=['z']))
+#    dat['H'] = np.sqrt(wmean(dat.z**2, dat['density'], dim=['z']))
+#    dat['Hw'] = np.sqrt(wmean(dat['z2w'], dat['density'], dim=['z']))
+#    dat['Hu'] = np.sqrt(wmean(dat['z2u'], dat['density'], dim=['z']))
+#    dat['Hc'] = np.sqrt(wmean(dat['z2c'], dat['density'], dim=['z']))
 
     return Rbins, dat.drop(['density','velocity1','velocity2','velocity3','pressure'])
 
