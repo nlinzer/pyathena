@@ -10,80 +10,67 @@ from pyathena.util.wmean import wmean
 
 Thot1, Twarm, Tcold = 2.e4, 5050, 184.
 
-def _transform_to_Rz(dat, Redges):
+def create_Rzprof(s, num):
     """
-    Caveat: Scale heights need a special treatment here.
-    """
-    warm = (dat['temperature'] > Twarm)&(dat['temperature'] < Thot1)
-    unstable = (dat['temperature'] > Tcold)&(dat['temperature'] < Twarm)
-    cold = dat['temperature'] < Tcold
-
-    Nr = len(Redges)-1
-    dat['R'] = np.sqrt(dat.x**2+dat.y**2)
-    dat['zsq'] = dat.z**2
-    newdat = []
-    Rbins = 0.5*(Redges[1:]+Redges[:-1])
-    for i in range(Nr):
-        Rl, Rr = Redges[i], Redges[i+1]
-        mask = (Rl < dat.R)&(dat.R < Rr)
-
-        # total
-        arr = dat.zsq.where(mask)
-        H = np.sqrt(wmean(arr, dat['density'].where(arr.notnull()), dim=['x','y','z']))
-
-        # warm
-        arr = dat.zsq.where(warm&mask)
-        Hw = np.sqrt(wmean(arr, dat['density'].where(arr.notnull()), dim=['x','y','z']))
-
-        # unstable
-        arr = dat.zsq.where(unstable&mask)
-        Hu = np.sqrt(wmean(arr, dat['density'].where(arr.notnull()), dim=['x','y','z']))
-
-        # cold
-        arr = dat.zsq.where(cold&mask)
-        Hc = np.sqrt(wmean(arr, dat['density'].where(arr.notnull()), dim=['x','y','z']))
-
-
-        datRz = dat.where(mask).mean(dim=['x','y']).expand_dims(dim={'R':Rbins[i:i+1]})
-        datRz = datRz.assign(H=H.expand_dims('R'))
-        datRz = datRz.assign(Hw=Hw.expand_dims('R'))
-        datRz = datRz.assign(Hu=Hu.expand_dims('R'))
-        datRz = datRz.assign(Hc=Hc.expand_dims('R'))
-
-        newdat.append(datRz)
-
-    newdat = xr.merge(newdat)
-    return newdat
-
-def create_rprof(s, num):
-    """
-    Create radial profile
+    Transform dataset from (x,y,z) to (R,z).
+    Scale height is a function of R only.
     """
     axis_idx = dict(x=0, y=1, z=2)
     # load vtk files
     ds = s.load_vtk(num=num)
-    dat = ds.get_field(field=['density','velocity','pressure'], as_xarray=True)
+    dat0 = ds.get_field(field=['density','velocity','pressure',
+        'gravitational_potential'], as_xarray=True)
 
-    # update phase information
+    # add additional fields
     cf = coolftn()
     u = Units()
-    pok = dat['pressure']*u.pok
-    T1 = pok/(dat['density']*u.muH)
-    dat['temperature'] = xr.DataArray(cf.get_temp(T1.values), coords=T1.coords, dims=T1.dims)
-    warm = (dat['temperature'] > Twarm)&(dat['temperature'] < Thot1)
-    unstable = (dat['temperature'] > Tcold)&(dat['temperature'] < Twarm)
-    cold = dat['temperature'] < Tcold
-    twophase = dat['temperature'] < Thot1
+    pok = dat0['pressure']*u.pok
+    T1 = pok/(dat0['density']*u.muH)
+    dat0['temperature'] = xr.DataArray(cf.get_temp(T1.values),
+            coords=T1.coords, dims=T1.dims)
+    zsq = xr.DataArray(dat0.z**2, name='zsq')
+    dat0['zsq'] = xr.broadcast(zsq, dat0)[0]
+    rcyl = xr.DataArray(np.sqrt(dat0.x**2+dat0.y**2), name='rcyl')
+    dat0['rcyl'] = xr.broadcast(rcyl, dat0)[0]
+    cos, sin = dat0.x/dat0.rcyl, dat0.y/dat0.rcyl
+    dat0['vr'] = dat0.velocity1*cos + dat0.velocity2*sin
+    dat0['vt'] = -dat0.velocity1*sin + dat0.velocity2*cos
+    dat0['vz'] = dat0.velocity3
+    dat0 = dat0.drop(['velocity1','velocity2','velocity3'])
 
-    # transform from (x,y,z) to (R,z) coordinates (azimuthal average)
+    # phase labels
+    warm = (dat0['temperature'] > Twarm)&(dat0['temperature'] < Thot1)
+    unstable = (dat0['temperature'] > Tcold)&(dat0['temperature'] < Twarm)
+    cold = dat0['temperature'] < Tcold
+    twophase = dat0['temperature'] < Thot1
+
+    # seperate different phases
+    data = {'all':dat0,
+            'w':dat0.where(warm),
+            'u':dat0.where(unstable),
+            'c':dat0.where(cold),
+            '2p':dat0.where(twophase)}
+
+    # Make radial bins
     Rmin, Rmax, dR = 0, 256, 10
     Redges = np.arange(Rmin, Rmax, dR)
     Rbins = 0.5*(Redges[1:]+Redges[:-1])
-    dat = _transform_to_Rz(dat, Redges)
+    Nr = len(Redges)-1
 
-    # add fields
-    dat['Sigma_gas'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='z')*s.u.Msun/s.u.pc**2
-    dat['Pth'] = dat['pressure'].interp(z=0)
-    dat['Pturb'] = (dat['density']*dat['velocity3']**2).interp(z=0)
+    newdata = {}
+    for phase, dat in data.items():
+        newdat = []
+        for i in range(Nr):
+            Rl, Rr = Redges[i], Redges[i+1]
+            mask = (Rl < dat.rcyl)&(dat.rcyl < Rr)
+            # calculate scale height at this annulus
+            arr = dat.zsq.where(mask)
+            H = np.sqrt(wmean(arr, dat['density'].where(arr.notnull()), dim=dat.dims))
+            # average over an annulus
+            datRz = dat.where(mask).mean(dim=['x','y']).expand_dims(dim={'R':Rbins[i:i+1]})
+            datRz = datRz.assign(H=H.expand_dims('R'))
+            newdat.append(datRz)
+        newdat = xr.merge(newdat)
+        newdata[phase] = newdat
 
-    return Rbins, dat.drop(['density','velocity1','velocity2','velocity3','pressure'])
+    return newdata
