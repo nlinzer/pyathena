@@ -126,7 +126,7 @@ def plt_all(s, num, fig, savfig=True):
     ds = s.load_vtk(num=num)
     dat = ds.get_field(field=['density','pressure'], as_xarray=True)
     hst = read_hst(s.files['hst'])
-    sp = read_starpar_vtk(s.files['starpar'][num])
+    sp = read_starpar_vtk(s.files['starpar'][num-s.nums_starpar[0]])
     time = ds.domain['time']*s.u.Myr
     axis_idx = dict(x=0, y=1, z=2)
     
@@ -214,13 +214,30 @@ def plt_all(s, num, fig, savfig=True):
     ax8.set_ylabel(r'$T\,[{\rm K}]$')
 
     # history
+
+    if s.basename=="M0.1_2pc":
+        Mdot = 0.1
+        sfrlim = [1e-2,1e0]
+        masslim = [1e5,1e7]
+    elif s.basename=="M1_2pc":
+        Mdot = 1
+        sfrlim = [1e-1,1e1]
+        masslim = [1e6,1e8]
+    elif s.basename=="M10_2pc":
+        Mdot = 10
+        sfrlim = [1e0,1e2]
+        masslim = [1e7,1e9]
+    else:
+        raise Exception("set appropriate ranges for the model {}".format(s.basename))
+
     ax9.semilogy(hst['time'], hst['sfr10'], 'r-', label='sfr10')
     ax9.semilogy(hst['time'], hst['sfr40'], 'g-', label='sfr40')
     ax9.semilogy(hst['time'], hst['sfr100'], 'm-', label='sfr100')
+    ax9.semilogy(hst['time'], Mdot*np.ones(len(hst['time'])), 'k--', label='inflow')
     ax9.set_xlabel("time ["+r"${\rm Myr}$"+"]")
     ax9.set_ylabel("star formation rate ["+r"$M_\odot\,{\rm yr}^{-1}$"+"]")
-    ax9.set_ylim(1e-1,1e1)
-    ax9.plot([time,time],[1e-1,1e1],'y-',lw=5)
+    ax9.set_ylim(sfrlim)
+    ax9.plot([time,time],sfrlim,'y-',lw=5)
     ax9.legend()
     ax10.semilogy(hst['time'], hst['Mc'], 'b-', label=r"$M_c$")
     ax10.semilogy(hst['time'], hst['Mu'], 'g-', label=r"$M_u$")
@@ -229,8 +246,8 @@ def plt_all(s, num, fig, savfig=True):
     ax10.semilogy(hst['time'], hst['msp'], 'k--', label=r"$M_{\rm sp}$")
     ax10.set_xlabel("time ["+r"${\rm Myr}$"+"]")
     ax10.set_ylabel("mass ["+r"${M_\odot}$"+"]")
-    ax10.set_ylim(1e6,1e8)
-    ax10.plot([time,time],[1e6,1e8],'y-',lw=5)
+    ax10.set_ylim(masslim)
+    ax10.plot([time,time],masslim,'y-',lw=5)
     ax10.legend()
 
     for ax in [ax1,ax2,ax3,ax4,ax5,ax6]:
