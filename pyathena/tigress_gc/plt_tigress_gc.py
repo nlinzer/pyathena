@@ -226,7 +226,7 @@ def plt_all(s, num, fig, savfig=True):
     elif s.basename=="M10_2pc":
         Mdot = 10
         sfrlim = [1e0,1e2]
-        masslim = [1e7,1e9]
+        masslim = [1e6,1e8]
     else:
         raise Exception("set appropriate ranges for the model {}".format(s.basename))
 

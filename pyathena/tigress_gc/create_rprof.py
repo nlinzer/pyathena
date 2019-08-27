@@ -32,8 +32,6 @@ def create_Rzprof(s, num, iphase):
     dat0['temperature'] = xr.DataArray(cf.get_temp(T1.values),
             coords=T1.coords, dims=T1.dims)
     del T1
-    zsq = xr.DataArray(dat0.z**2, name='zsq')
-    dat0['zsq'] = xr.broadcast(zsq, dat0)[0]
     rcyl = xr.DataArray(np.sqrt(dat0.x**2+dat0.y**2), name='rcyl')
     dat0['rcyl'] = xr.broadcast(rcyl, dat0)[0]
     cos, sin = dat0.x/dat0.rcyl, dat0.y/dat0.rcyl
@@ -46,18 +44,22 @@ def create_Rzprof(s, num, iphase):
     dat0 = dat0.drop('velocity3')
 
     # phase labels
-    if iphase==0:
+    if iphase==0: # all
         phase = False
-    elif iphase==1:
+    elif iphase==1: # cold
         phase = dat0['temperature'] < Tcold
-    elif iphase==2:
+    elif iphase==2: # unstable
         phase = (dat0['temperature'] > Tcold)&(dat0['temperature'] < Twarm)
-    elif iphase==3:
+    elif iphase==3: # warm
         phase = (dat0['temperature'] > Twarm)&(dat0['temperature'] < Thot1)
-    elif iphase==4:
+    elif iphase==4: # hot1
         phase = (dat0['temperature'] > Thot1)&(dat0['temperature'] < Thot2)
-    elif iphase==5:
+    elif iphase==5: # hot2
         phase = dat0['temperature'] > Thot2
+    elif iphase==6: # warm+unstable
+        phase = (dat0['temperature'] > Tcold)&(dat0['temperature'] < Thot1)
+    elif iphase==7: # warm+unstable+cold
+        phase = dat0['temperature'] < Thot1
     else:
         raise Exception("invalid iphase")
 
@@ -65,25 +67,6 @@ def create_Rzprof(s, num, iphase):
         dat = dat0
     else:
         dat = dat0.where(phase)
-
-#    hot = dat0['temperature'] > Thot1
-#    twophase = dat0['temperature'] < Thot1
-#    warm = (dat0['temperature'] > Twarm)&(dat0['temperature'] < Thot1)
-#    unstable = (dat0['temperature'] > Tcold)&(dat0['temperature'] < Twarm)
-#    cold = dat0['temperature'] < Tcold
-#
-#    # seperate different phases
-#    data = {'all':dat0,
-#            'h':dat0.where(hot),
-#            '2p':dat0.where(twophase),
-#            'w':dat0.where(warm),
-#            'u':dat0.where(unstable),
-#            'c':dat0.where(cold)}
-#    del hot
-#    del twophase
-#    del warm
-#    del unstable
-#    del cold
 
     # Make radial bins
     Rmin, Rmax, dR = 0, 256, 10
@@ -95,17 +78,23 @@ def create_Rzprof(s, num, iphase):
     for i in range(Nr):
         Rl, Rr = Redges[i], Redges[i+1]
         mask = (Rl < dat.rcyl)&(dat.rcyl < Rr)
+
+        # calculate midplane turbulent pressure
+        Pturb = (dat.density.interp(z=0).where(mask)*dat.vz.interp(z=0).where(mask)**2).mean()
+
         # calculate volume filling factor
         mask0 = (Rl < dat0.rcyl)&(dat0.rcyl < Rr)
         fvolume = ((~np.isnan(dat.rcyl.where(mask, drop=True))).sum(dim=['x','y'])
                 / (~np.isnan(dat0.rcyl.where(mask0, drop=True))).sum(dim=['x','y']))
+
         # average over an annulus
         datRz = dat.where(mask).mean(dim=['x','y']).expand_dims(dim={'R':Rbins[i:i+1]})
         datRz['fvolume'] = fvolume.expand_dims('R')
+        datRz['Pturb'] = Pturb.expand_dims('R')
         newdat.append(datRz)
     newdat = xr.merge(newdat)
-    newdat = newdat.drop(['rcyl','zsq'])
-    newdat = newdat.rename({'density':'rho', 'pressure':'P',
+    newdat = newdat.drop('rcyl')
+    newdat = newdat.rename({'density':'rho', 'pressure':'Pth',
         'gravitational_potential':'Phi', 'temperature':'T'})
     fname = "{}.{:04d}.phase{}.Rzprof".format(s.problem_id, num, iphase)
     with open(fname, "wb") as handle:
@@ -114,7 +103,6 @@ def create_Rzprof(s, num, iphase):
 def get_sfr(sp, tbinMyr):
     """ SFR in Msun / yr """
     return sp[sp['mage'] < tbinMyr]['mass'].sum() / (tbinMyr*1e6)
-
 
 def sfrprof(s, num):
     ds = s.load_vtk(num=num)
@@ -137,5 +125,5 @@ def sfrprof(s, num):
         R = np.sqrt(sp.x1**2 + sp.x2**2)
         area = np.pi*(Rr**2-Rl**2)
         sfr10.append(get_sfr(sp[(Rl < R)&(R < Rr)], 10)/area)
-    sfr10 = np.array(sfr10)
+    sfr10 = np.array(sfr10)*1e6 # sfr [ Msun / yr / kpc^2 ]
     return Rbins, sfr10
