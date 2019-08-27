@@ -48,15 +48,15 @@ def plt_proj_density(s, num, fig, savfig=True):
     axis_idx = dict(x=0, y=1, z=2)
 
     # prepare variables to be plotted
-    dat['surface_density_xy'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='z')*s.u.Msun/s.u.pc**2
-    dat['surface_density_xz'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='y')*s.u.Msun/s.u.pc**2
+    dat['surf_xy'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='z')*s.u.Msun/s.u.pc**2
+    dat['surf_xz'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='y')*s.u.Msun/s.u.pc**2
 
     # plot
 
     # gas
-    dat['surface_density_xy'].plot.imshow(ax=ax1, norm=mpl.colors.LogNorm(),
+    dat['surf_xy'].plot.imshow(ax=ax1, norm=mpl.colors.LogNorm(),
             cmap='pink_r', vmin=1e0, vmax=1e4, cbar_ax=cax1)
-    dat['surface_density_xz'].plot.imshow(ax=ax2, norm=mpl.colors.LogNorm(),
+    dat['surf_xz'].plot.imshow(ax=ax2, norm=mpl.colors.LogNorm(),
             cmap='pink_r', vmin=1e-2, vmax=1e5, cbar_ax=cax2)
 
     # starpar
@@ -125,7 +125,7 @@ def plt_all(s, num, fig, savfig=True):
     # load vtk and hst files
     ds = s.load_vtk(num=num)
     dat = ds.get_field(field=['density','pressure'], as_xarray=True)
-    hst = read_hst(s.files['hst'])
+    hst = s.read_hst(force_override=True)
     sp = read_starpar_vtk(s.files['starpar'][num-s.nums_starpar[0]])
     time = ds.domain['time']*s.u.Myr
     axis_idx = dict(x=0, y=1, z=2)
@@ -135,39 +135,33 @@ def plt_all(s, num, fig, savfig=True):
     # T_1 = (p/k) / (rho m_p) is the temperature assuming mu=1
     dat['T1'] = dat['pok']/(dat['density']*s.u.muH)
     dat['temperature'] = xr.DataArray(coolftn().get_temp(dat['T1'].values),
-                                      coords=dat['T1'].coords, dims=dat['T1'].dims)
-    dat['surface_density_xy'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='z')*s.u.Msun/s.u.pc**2
-    dat['surface_density_xz'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='y')*s.u.Msun/s.u.pc**2
-
-    vol = (ds.domain['Lx'][0]*ds.domain['Lx'][1]*ds.domain['Lx'][2])
-    hst['time'] *= s.u.Myr
-    hst['mass'] *= (vol*s.u.Msun)
-    hst['Mw'] *= (vol*s.u.Msun)
-    hst['Mu'] *= (vol*s.u.Msun)
-    hst['Mc'] *= (vol*s.u.Msun)
-    hst['msp'] *= (vol*s.u.Msun)
-    hst['sfr10'] *= (ds.domain['Lx'][axis_idx['x']]
-            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
-    hst['sfr40'] *= (ds.domain['Lx'][axis_idx['x']]
-            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
-    hst['sfr100'] *= (ds.domain['Lx'][axis_idx['x']]
-            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
+            coords=dat['T1'].coords, dims=dat['T1'].dims)
+    dat['surf_xy'] = ((dat['density']*ds.domain['dx'][axis_idx['z']])
+            .sum(dim='z')*s.u.Msun/s.u.pc**2)
+    dat['surf_xz'] = ((dat['density']*ds.domain['dx'][axis_idx['z']])
+            .sum(dim='y')*s.u.Msun/s.u.pc**2)
 
     # plot
 
     # gas
     (dat['density'].interp(z=0)).plot.imshow(ax=ax1, norm=mpl.colors.LogNorm(),
-            cmap='viridis', vmin=1e0, vmax=1e4, cbar_ax=cax1)
+            cmap='viridis', vmin=1e0, vmax=1e4, cbar_ax=cax1, add_labels=False,
+            cbar_kwargs={'label':r"$n_{\rm H}\,[\rm cm^{-3}]$"})
     (dat['density'].interp(y=0)).plot.imshow(ax=ax2, norm=mpl.colors.LogNorm(),
-            cmap='viridis', vmin=1e-2, vmax=1e4, cbar_ax=cax2)
-    dat['surface_density_xy'].plot.imshow(ax=ax3, norm=mpl.colors.LogNorm(),
-            cmap='pink_r', vmin=1e0, vmax=1e4, cbar_ax=cax3)
-    dat['surface_density_xz'].plot.imshow(ax=ax4, norm=mpl.colors.LogNorm(),
-            cmap='pink_r', vmin=1e-2, vmax=1e5, cbar_ax=cax4)
+            cmap='viridis', vmin=1e-2, vmax=1e4, cbar_ax=cax2, add_labels=False,
+            cbar_kwargs={'label':r"$n_{\rm H}\,[\rm cm^{-3}]$"})
+    dat['surf_xy'].plot.imshow(ax=ax3, norm=mpl.colors.LogNorm(), cmap='pink_r',
+            vmin=1e0, vmax=1e4, cbar_ax=cax3, add_labels=False,
+            cbar_kwargs={'label':r"$\Sigma_{\rm gas}\,[M_\odot\,\rm pc^{-2}]$"})
+    dat['surf_xz'].plot.imshow(ax=ax4, norm=mpl.colors.LogNorm(), cmap='pink_r',
+            vmin=1e-2, vmax=1e5, cbar_ax=cax4, add_labels=False,
+            cbar_kwargs={'label':r"$\Sigma_{\rm gas}\,[M_\odot\,\rm pc^{-2}]$"})
     (dat['temperature'].interp(z=0)).plot.imshow(ax=ax5, norm=mpl.colors.LogNorm(),
-            cmap='coolwarm', vmin=1e1, vmax=1e7, cbar_ax=cax5)
+            cmap='coolwarm', vmin=1e1, vmax=1e7, cbar_ax=cax5, add_labels=False,
+            cbar_kwargs={'label':r"$T\,[\rm K]$"})
     (dat['temperature'].interp(y=0)).plot.imshow(ax=ax6, norm=mpl.colors.LogNorm(),
-            cmap='coolwarm', vmin=1e1, vmax=1e7, cbar_ax=cax6)
+            cmap='coolwarm', vmin=1e1, vmax=1e7, cbar_ax=cax6, add_labels=False,
+            cbar_kwargs={'label':r"$T\,[\rm K]$"})
 
     # starpar
     young_sp = sp[sp['age']*s.u.Myr < 40.]
@@ -232,8 +226,8 @@ def plt_all(s, num, fig, savfig=True):
     ax9.semilogy(hst['time'], hst['sfr40'], 'g-', label='sfr40')
     ax9.semilogy(hst['time'], hst['sfr100'], 'm-', label='sfr100')
     ax9.semilogy(hst['time'], Mdot*np.ones(len(hst['time'])), 'k--', label='inflow')
-    ax9.set_xlabel("time ["+r"${\rm Myr}$"+"]")
-    ax9.set_ylabel("star formation rate ["+r"$M_\odot\,{\rm yr}^{-1}$"+"]")
+    ax9.set_xlabel("time"+r"$\,[{\rm Myr}]$")
+    ax9.set_ylabel("SFR"+r"$\,[M_\odot\,{\rm yr}^{-1}]$")
     ax9.set_ylim(sfrlim)
     ax9.plot([time,time],sfrlim,'y-',lw=5)
     ax9.legend()
@@ -242,63 +236,54 @@ def plt_all(s, num, fig, savfig=True):
     ax10.semilogy(hst['time'], hst['Mw'], 'r-', label=r"$M_w$")
     ax10.semilogy(hst['time'], hst['mass'], 'k-', label=r"$M_{\rm tot}$")
     ax10.semilogy(hst['time'], hst['msp'], 'k--', label=r"$M_{\rm sp}$")
-    ax10.set_xlabel("time ["+r"${\rm Myr}$"+"]")
-    ax10.set_ylabel("mass ["+r"${M_\odot}$"+"]")
+    ax10.set_xlabel("time"+r"$\,[{\rm Myr}]$")
+    ax10.set_ylabel("mass"+r"$\,[M_\odot]$")
     ax10.set_ylim(masslim)
     ax10.plot([time,time],masslim,'y-',lw=5)
     ax10.legend()
 
     for ax in [ax1,ax2,ax3,ax4,ax5,ax6]:
         ax.set_aspect('equal')
-
+    
     # figure annotations
     fig.suptitle('{0:s}, time: {1:.1f} Myr'.format(s.basename, time), fontsize=30, x=.5, y=.93)
     
+    plt.subplots_adjust(left=0.02, right=0.98, top=0.87, bottom=0.1)
+
     if savfig:
         savdir = osp.join('./figures-all')
         if not os.path.exists(savdir):
             os.makedirs(savdir)
         fig.savefig(osp.join(savdir, 'all.{0:s}.{1:04d}.png'
-            .format(s.basename, ds.num)),bbox_inches='tight')
+            .format(s.basename, ds.num)))
 
-def plt_history(s, fig, savfig=True):
+def plt_history(s, fig, savfig=False):
     """
     Create history plot.
     """
     # create axes
-    gs = GridSpec(4,1,figure=fig,hspace=0)
+    gs = GridSpec(2,1,figure=fig,hspace=0)
     ax1 = fig.add_subplot(gs[0])
     ax2 = fig.add_subplot(gs[1], sharex=ax1)
-    ax3 = fig.add_subplot(gs[2], sharex=ax1)
-    ax4 = fig.add_subplot(gs[3], sharex=ax1)
 
     # load vtk and hst files
-    ds = s.load_vtk(num=0)
-    hst = read_hst(s.files['hst'])
+    hst = s.read_hst(force_override=True)
     axis_idx = dict(x=0, y=1, z=2)
 
-    # prepare variables to be plotted
-    vol = (ds.domain['Lx'][0]*ds.domain['Lx'][1]*ds.domain['Lx'][2])
-    hst['time'] *= s.u.Myr
-    hst['mass'] *= (vol*s.u.Msun)
-    hst['Mw'] *= (vol*s.u.Msun)
-    hst['Mu'] *= (vol*s.u.Msun)
-    hst['Mc'] *= (vol*s.u.Msun)
-    hst['msp'] *= (vol*s.u.Msun)
-    hst['sfr1'] *= (ds.domain['Lx'][axis_idx['x']]
-            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
-    hst['sfr5'] *= (ds.domain['Lx'][axis_idx['x']]
-            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
-    hst['sfr10'] *= (ds.domain['Lx'][axis_idx['x']]
-            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
-    hst['sfr40'] *= (ds.domain['Lx'][axis_idx['x']]
-            *ds.domain['Lx'][axis_idx['y']]*s.u.pc**2)/1e6
-    KE = (hst['x1KE_2p']+hst['x2KE_2p']+hst['x3KE_2p'])*vol*s.u.Msun*s.u.kms**2
-    M2p = hst['Mw']+hst['Mu']+hst['Mc']
-    hst['veldisp'] = np.sqrt(2*KE/M2p)
-    hst['Hc'] = np.sqrt(hst['H2c']*vol*s.u.Msun*s.u.pc**2/hst['Mc'])
-    hst['Hu'] = np.sqrt(hst['H2u']*vol*s.u.Msun*s.u.pc**2/hst['Mu'])
-    hst['Hw'] = np.sqrt(hst['H2w']*vol*s.u.Msun*s.u.pc**2/hst['Mw'])
+    if s.basename=="M0.1_2pc":
+        Mdot = 0.1
+        sfrlim = [1e-2,1e0]
+        masslim = [1e5,1e7]
+    elif s.basename=="M1_2pc":
+        Mdot = 1
+        sfrlim = [1e-1,1e1]
+        masslim = [1e6,1e8]
+    elif s.basename=="M10_2pc":
+        Mdot = 10
+        sfrlim = [1e0,1e2]
+        masslim = [1e6,1e8]
+    else:
+        raise Exception("set appropriate ranges for the model {}".format(s.basename))
 
     # plot
 
@@ -308,7 +293,7 @@ def plt_history(s, fig, savfig=True):
     ax1.semilogy(hst['time'], hst['sfr10'], 'b-', label='sfr10')
     ax1.semilogy(hst['time'], hst['sfr40'], 'm-', label='sfr40')
     ax1.set_ylabel("SFR ["+r"$M_\odot\,{\rm yr}^{-1}$"+"]")
-    ax1.set_ylim(1e-1,1e1)
+    ax1.set_ylim(sfrlim)
     ax1.legend()
     ax2.semilogy(hst['time'], hst['Mc'], 'b-', label=r"$M_c$")
     ax2.semilogy(hst['time'], hst['Mu'], 'g-', label=r"$M_u$")
@@ -316,16 +301,8 @@ def plt_history(s, fig, savfig=True):
     ax2.semilogy(hst['time'], hst['mass'], 'k-', label=r"$M_{\rm tot}$")
     ax2.semilogy(hst['time'], hst['msp'], 'k--', label=r"$M_{\rm sp}$")
     ax2.set_ylabel("mass ["+r"${M_\odot}$"+"]")
-    ax2.set_ylim(1e6,1e8)
+    ax2.set_ylim(masslim)
     ax2.legend()
-    ax3.semilogy(hst['time'], hst['veldisp'], 'k-')
-    ax3.set_ylabel("velocity dispersion ["+r"${\rm km/s}$"+"]")
-    ax4.semilogy(hst['time'], hst['Hc'], 'b-', label=r"$M_c$")
-    ax4.semilogy(hst['time'], hst['Hu'], 'g-', label=r"$M_u$")
-    ax4.semilogy(hst['time'], hst['Hw'], 'r-', label=r"$M_w$")
-    ax4.set_xlabel("time ["+r"${\rm Myr}$"+"]")
-    ax4.set_ylabel("scale height ["+r"${\rm pc}$"+"]")
-    ax4.legend()
 
     # figure annotations
     fig.suptitle('{0:s}'.format(s.basename), fontsize=30, x=.5, y=.93)
@@ -349,19 +326,18 @@ def mass_flux(s, fig):
     surface flux numerically - SMOON
     """
     # load history file
-    hst = read_hst(s.files['hst'])
+    hst = s.read_hst(force_override=True)
     Lx=s.par['domain1']['x1max']-s.par['domain1']['x1min']
     Ly=s.par['domain1']['x2max']-s.par['domain1']['x2min']
     Lz=s.par['domain1']['x3max']-s.par['domain1']['x3min']
-    vol = Lx*Ly*Lz
 
-    time = hst['time']*s.u.Myr
-    sfr = hst['sfr10']*Lx*Ly*s.u.pc**2/1e6
-    Mtot = (hst['mass']+hst['msp'])*vol*s.u.Msun
+    time = hst['time']
+    sfr = hst['sfr10']
+    Mtot = (hst['mass']+hst['msp'])
     inflow = np.ones(len(time))
-    xflux = (-hst['F1_lower']+hst['F1_upper'])*Ly*Lz*s.u.Msun/s.u.Myr/1e6
-    yflux = (-hst['F2_lower']+hst['F2_upper'])*Lx*Lz*s.u.Msun/s.u.Myr/1e6 + inflow
-    zflux = (-hst['F3_lower']+hst['F3_upper'])*Lx*Ly*s.u.Msun/s.u.Myr/1e6
+    xflux = (-hst['F1_lower']+hst['F1_upper'])
+    yflux = (-hst['F2_lower']+hst['F2_upper']) + inflow
+    zflux = (-hst['F3_lower']+hst['F3_upper'])
 
     ax = fig.add_subplot(111)
     ax.semilogy(time, sfr, 'k-', label='SFR')
@@ -373,21 +349,15 @@ def mass_flux(s, fig):
 
 def mass_conservation(s, fig):
     # load history file
-    hst = read_hst(s.files['hst'])
-    Lx=s.par['domain1']['x1max']-s.par['domain1']['x1min']
-    Ly=s.par['domain1']['x2max']-s.par['domain1']['x2min']
-    Lz=s.par['domain1']['x3max']-s.par['domain1']['x3min']
-    vol = Lx*Ly*Lz
+    hst = s.read_hst(force_override=True)
 
-    time = hst['time']*s.u.Myr
-    sfr = hst['sfr10']*Lx*Ly*s.u.pc**2/1e6
-    Mtot = (hst['mass']+hst['msp'])*vol*s.u.Msun
-    Msp_left = hst['msp_left']*vol*s.u.Msun
-    xflux = (-hst['F1_lower']+hst['F1_upper'])*Ly*Lz*s.u.Msun/s.u.Myr
-    yflux = (-hst['F2_lower']+hst['F2_upper'])*Lx*Lz*s.u.Msun/s.u.Myr
-    zflux = (-hst['F3_lower']+hst['F3_upper'])*Lx*Ly*s.u.Msun/s.u.Myr
+    time = hst['time']
+    sfr = hst['sfr10']
+    Mtot = (hst['mass']+hst['msp'])
+    Msp_left = hst['msp_left']
+    xflux = (-hst['F1_lower']+hst['F1_upper'])
+    yflux = (-hst['F2_lower']+hst['F2_upper'])
+    zflux = (-hst['F3_lower']+hst['F3_upper'])
     outflow = xflux+yflux+zflux
-
     ax.semilogy(time, Mtot, 'k-')
     ax.semilogy(time, Mtot[0]-outflow*time-Msp_left, 'k--')
-    #ax.plot(time,(Mtot + (outflow)*time)/Mtot[0])
