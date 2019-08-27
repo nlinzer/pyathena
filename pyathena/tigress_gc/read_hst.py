@@ -23,7 +23,7 @@ class ReadHst:
         dvol = domain['dx'].prod()
         # total volume of domain (code unit)
         vol = domain['Lx'].prod()        
-        # Area of domain (code unit)
+        # domain length (code unit)
         Lx = domain['Lx'][0]
         Ly = domain['Lx'][1]
         Lz = domain['Lx'][2]
@@ -45,20 +45,21 @@ class ReadHst:
         hst['F1_upper'] *= (Ly*Lz*u.mass_flux*u.length**2).to('Msun/yr').value
         hst['F2_upper'] *= (Lx*Lz*u.mass_flux*u.length**2).to('Msun/yr').value
         hst['F3_upper'] *= (Lx*Ly*u.mass_flux*u.length**2).to('Msun/yr').value
-        # star formation rate in Msun/yr
+        hst['sfr1'] *= (Lx*Ly/1e6)
+        hst['sfr5'] *= (Lx*Ly/1e6)
         hst['sfr10'] *= (Lx*Ly/1e6)
         hst['sfr40'] *= (Lx*Ly/1e6)
         hst['sfr100'] *= (Lx*Ly/1e6)
-        # Gas surface density in Msun/pc^2
-        hst['Sigma_gas'] = hst['mass']/(Lx*Ly*u.pc**2)
 
-        if 'x1Me' in hst:
-            mhd = True
-        else:
-            mhd = False
+        processed_keys = ['time_code', 'time', 'dt', 'mass', 'Mh2', 'Mh1', 'Mw',
+                'Mu', 'Mc', 'msp', 'msp_left', 'F1_lower', 'F2_lower',
+                'F3_lower', 'F1_upper', 'F2_upper', 'F3_upper', 'sfr1', 'sfr5',
+                'sfr10', 'sfr40', 'sfr100', 'heat_ratio', 'ftau']
+
+        for key in hst.columns:
+            if key not in processed_keys:
+                hst.drop(columns=key, inplace=True)
         
         hst.index = hst['time_code']
         
         self.hst = hst
-        
-        return hst

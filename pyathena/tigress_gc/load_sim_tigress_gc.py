@@ -55,17 +55,18 @@ class LoadSimTIGRESSGCAll(object):
         # Default models
         if models is None:
             models = dict()
-            # M1_2pc
-            models['M1_2pc'] = '/home/smoon/data/gc/M1_2pc'
-            # M0.1_4pc
-            models['M0.1_4pc_Tth50'] = '/home/smoon/data/gc/M0.1_4pc_Tth50'
-            # M1_4pc
-            models['M1_4pc'] = '/home/smoon/data/gc/M1_4pc'
-            models['M1_4pc_Tth50'] = '/home/smoon/data/gc/M1_4pc_Tth50'
-            models['TM2_4pc_fast_inflow'] = '/home/smoon/data/gc/TM2_4pc_fast_inflow'
-            models['TM2_4pc_slow_inflow'] = '/home/smoon/data/gc/TM2_4pc_slow_inflow'
-            # M10_4pc
-            models['M10_4pc_Tth50'] = '/home/smoon/data/gc/M10_4pc_Tth50'
+            # M0.1
+            models['M0.1_1pc'] = '/data/shmoon/TIGRESS-GC/M0.1_1pc'
+            models['M0.1_2pc'] = '/data/shmoon/TIGRESS-GC/M0.1_2pc'
+            models['M0.1_4pc'] = '/data/shmoon/TIGRESS-GC/M0.1_4pc'
+            # M1
+            models['M1_1pc'] = '/data/shmoon/TIGRESS-GC/M1_1pc'
+            models['M1_2pc'] = '/data/shmoon/TIGRESS-GC/M1_2pc'
+            models['M1_4pc'] = '/data/shmoon/TIGRESS-GC/M1_4pc'
+            # M10
+            models['M10_1pc'] = '/data/shmoon/TIGRESS-GC/M10_1pc'
+            models['M10_2pc'] = '/data/shmoon/TIGRESS-GC/M10_2pc'
+            models['M10_4pc'] = '/data/shmoon/TIGRESS-GC/M10_4pc'
 
         self.models = list(models.keys())
         self.basedirs = dict()
