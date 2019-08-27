@@ -131,11 +131,9 @@ def plt_all(s, num, fig, savfig=True):
     axis_idx = dict(x=0, y=1, z=2)
     
     # prepare variables to be plotted
-    mH = (1.00784*au.u).cgs.value
-    dat['nH'] = (dat['density']*s.u.density.value)/(s.u.muH*mH)
     dat['pok'] = dat['pressure']*s.u.pok
     # T_1 = (p/k) / (rho m_p) is the temperature assuming mu=1
-    dat['T1'] = dat['pok']/(dat['nH']*s.u.muH)
+    dat['T1'] = dat['pok']/(dat['density']*s.u.muH)
     dat['temperature'] = xr.DataArray(coolftn().get_temp(dat['T1'].values),
                                       coords=dat['T1'].coords, dims=dat['T1'].dims)
     dat['surface_density_xy'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='z')*s.u.Msun/s.u.pc**2
@@ -158,9 +156,9 @@ def plt_all(s, num, fig, savfig=True):
     # plot
 
     # gas
-    (dat['nH'].interp(z=0)).plot.imshow(ax=ax1, norm=mpl.colors.LogNorm(),
+    (dat['density'].interp(z=0)).plot.imshow(ax=ax1, norm=mpl.colors.LogNorm(),
             cmap='viridis', vmin=1e0, vmax=1e4, cbar_ax=cax1)
-    (dat['nH'].interp(y=0)).plot.imshow(ax=ax2, norm=mpl.colors.LogNorm(),
+    (dat['density'].interp(y=0)).plot.imshow(ax=ax2, norm=mpl.colors.LogNorm(),
             cmap='viridis', vmin=1e-2, vmax=1e4, cbar_ax=cax2)
     dat['surface_density_xy'].plot.imshow(ax=ax3, norm=mpl.colors.LogNorm(),
             cmap='pink_r', vmin=1e0, vmax=1e4, cbar_ax=cax3)
@@ -195,15 +193,15 @@ def plt_all(s, num, fig, savfig=True):
 
     # phase diagram
     histnP,xedgnP,yedgnP = np.histogram2d(
-            np.log10(np.array(dat['nH']).flatten()),
+            np.log10(np.array(dat['density']).flatten()),
             np.log10(np.array(dat['pok']).flatten()), bins=200,
             range=[[-3,5],[2,8]],density=True,
-            weights=np.array(dat['nH']).flatten())
+            weights=np.array(dat['density']).flatten())
     histnT,xedgnT,yedgnT = np.histogram2d(
-            np.log10(np.array(dat['nH']).flatten()),
+            np.log10(np.array(dat['density']).flatten()),
             np.log10(np.array(dat['temperature']).flatten()), bins=200,
             range=[[-3,5],[1,7]],density=True,
-            weights=np.array(dat['nH']).flatten())
+            weights=np.array(dat['density']).flatten())
     ax7.imshow(histnP.T, origin='lower', norm=mpl.colors.LogNorm(),
             extent=[xedgnP[0], xedgnP[-1], yedgnP[0], yedgnP[-1]], cmap='Greys')
     ax8.imshow(histnT.T, origin='lower', norm=mpl.colors.LogNorm(),
