@@ -63,3 +63,4 @@ class ReadHst:
         hst.index = hst['time_code']
         
         self.hst = hst
+        return hst
