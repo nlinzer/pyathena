@@ -207,20 +207,20 @@ def plt_all(s, num, fig, savfig=True):
 
     # history
 
-    if s.basename=="M0.1_2pc":
+    if s.basename in ["M0.1_1pc", "M0.1_2pc", "M0.1_4pc"]:
         Mdot = 0.1
         sfrlim = [1e-2,1e0]
         masslim = [1e5,1e7]
-    elif s.basename=="M1_2pc":
+    elif s.basename in ["M1_1pc", "M1_2pc", "M1_4pc", "LE.M1_2pc"]:
         Mdot = 1
         sfrlim = [1e-1,1e1]
         masslim = [1e6,1e8]
-    elif s.basename=="M10_2pc":
+    elif s.basename in ["M10_1pc", "M10_2pc", "M10_4pc"]:
         Mdot = 10
         sfrlim = [1e0,1e2]
         masslim = [1e6,1e8]
     else:
-        raise Exception("set appropriate ranges for the model {}".format(s.basename))
+        raise Exception("set appropriate yranges for the model {}".format(s.basename))
 
     ax9.semilogy(hst['time'], hst['sfr10'], 'r-', label='sfr10')
     ax9.semilogy(hst['time'], hst['sfr40'], 'g-', label='sfr40')

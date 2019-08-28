@@ -130,9 +130,8 @@ class LoadSim(object):
                                  'Try vtk in id0')
             # Check if joined vtk (or vtk in id0) exists
             self.fvtk = get_fvtk(kind[1], num, ivtk)
-            if not osp.exists(self.fvtk):
-                self.logger.error('[load_vtk]: Vtk file does not exist {:s}'.\
-                                  format(self.fvtk))
+            if self.fvtk is None or not osp.exists(self.fvtk):
+                self.logger.error('[load_vtk]: Vtk file does not exist.')
                                 
         if self.load_method == 'pyathena':
             self.ds = AthenaDataSet(self.fvtk)
