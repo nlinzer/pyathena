@@ -60,7 +60,7 @@ def read_starpar_vtk(filename, force_override=False, verbose=False):
     filename : string
         Name of the file to open, including extension
     force_override : bool
-        Flag to force read of hst file even when pickle exists
+        Flag to force read of starpar_vtk file even when pickle exists
     
     Returns
     -------
