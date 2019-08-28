@@ -126,7 +126,7 @@ def plt_all(s, num, fig, savfig=True):
     ds = s.load_vtk(num=num)
     dat = ds.get_field(field=['density','pressure'], as_xarray=True)
     hst = s.read_hst(force_override=True)
-    sp = read_starpar_vtk(s.files['starpar'][num-s.nums_starpar[0]])
+    sp = s.load_starpar_vtk(num=num)
     time = ds.domain['time']*s.u.Myr
     axis_idx = dict(x=0, y=1, z=2)
     
