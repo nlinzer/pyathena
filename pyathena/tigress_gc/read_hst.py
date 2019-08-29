@@ -3,9 +3,13 @@
 import os
 import numpy as np
 import pandas as pd
+from astropy import units as au
+from scipy import integrate
 
 from ..io.read_hst import read_hst
 from ..load_sim import LoadSim
+from .pot import vcirc
+
 
 class ReadHst:
 
@@ -13,8 +17,6 @@ class ReadHst:
     def read_hst(self, savdir=None, force_override=False):
         """Function to read hst and convert quantities to convenient units
         """
-
-        hst = read_hst(self.files['hst'], force_override=force_override)
     
         u = self.u
         domain = self.domain
@@ -22,45 +24,71 @@ class ReadHst:
         # volume of resolution element (code unit)
         dvol = domain['dx'].prod()
         # total volume of domain (code unit)
-        vol = domain['Lx'].prod()        
+        vol = domain['Lx'].prod()
         # domain length (code unit)
         Lx = domain['Lx'][0]
         Ly = domain['Lx'][1]
         Lz = domain['Lx'][2]
+        # area of domain
+        area = [Lx*Ly, Lz*Lx, Ly*Lz]
 
-        hst['time_code'] = hst['time']
-        hst['time'] *= u.Myr
-        hst['dt'] *= u.Myr
-        hst['mass'] *= vol*u.Msun
-        hst['Mh2'] *= vol*u.Msun
-        hst['Mh1'] *= vol*u.Msun
-        hst['Mw'] *= vol*u.Msun
-        hst['Mu'] *= vol*u.Msun
-        hst['Mc'] *= vol*u.Msun
-        hst['msp'] *= vol*u.Msun
-        hst['msp_left'] *= vol*u.Msun
-        hst['F1_lower'] *= (-1.*Ly*Lz*u.mass_flux*u.length**2).to('Msun/yr').value
-        hst['F2_lower'] *= (-1.*Lx*Lz*u.mass_flux*u.length**2).to('Msun/yr').value
-        hst['F3_lower'] *= (-1.*Lx*Ly*u.mass_flux*u.length**2).to('Msun/yr').value
-        hst['F1_upper'] *= (Ly*Lz*u.mass_flux*u.length**2).to('Msun/yr').value
-        hst['F2_upper'] *= (Lx*Lz*u.mass_flux*u.length**2).to('Msun/yr').value
-        hst['F3_upper'] *= (Lx*Ly*u.mass_flux*u.length**2).to('Msun/yr').value
-        hst['sfr1'] *= (Lx*Ly/1e6)
-        hst['sfr5'] *= (Lx*Ly/1e6)
-        hst['sfr10'] *= (Lx*Ly/1e6)
-        hst['sfr40'] *= (Lx*Ly/1e6)
-        hst['sfr100'] *= (Lx*Ly/1e6)
+        # Orbital time at the bulge scale length rb
+        rb = 120
+        time_orb = ((2*np.pi*rb*au.pc)/(vcirc(rb)*au.km/au.s)).to('Myr').value
 
-        processed_keys = ['time_code', 'time', 'dt', 'mass', 'Mh2', 'Mh1', 'Mw',
-                'Mu', 'Mc', 'msp', 'msp_left', 'F1_lower', 'F2_lower',
-                'F3_lower', 'F1_upper', 'F2_upper', 'F3_upper', 'sfr1', 'sfr5',
-                'sfr10', 'sfr40', 'sfr100', 'heat_ratio', 'ftau']
+        hst = read_hst(self.files['hst'], force_override=force_override)
 
-        for key in hst.columns:
-            if key not in processed_keys:
-                hst.drop(columns=key, inplace=True)
+        h = pd.DataFrame()
+
+        # Time in code unit
+        h['time_code'] = hst['time']
+        # Time in Myr
+        h['time'] = hst['time']*u.Myr
+        # Time in orbital time
+        h['time_orb'] = h['time']/time_orb
+
+        # Total gas mass in Msun
+        h['mass'] = hst['mass']*vol*u.Msun
+        h['Mh2'] = hst['Mh2']*vol*u.Msun
+        h['Mh1'] = hst['Mh1']*vol*u.Msun
+        h['Mw'] = hst['Mw']*vol*u.Msun
+        h['Mu'] = hst['Mu']*vol*u.Msun
+        h['Mc'] = hst['Mc']*vol*u.Msun
+        h['msp'] = hst['msp']*vol*u.Msun
+        h['msp_left'] = hst['msp_left']*vol*u.Msun
+
+        # Total outflow mass
+        for i, direction in enumerate(['F3','F2','F1']):
+            flux = (hst[direction+'_upper'] - hst[direction+'_lower'])\
+                    *area[i]*u.mass_flux*u.length**2
+            h['mass_out'] = integrate.cumtrapz(flux, h['time'], initial=0.0)
+
+        # Calculate (cumulative) SN ejecta mass
+        # JKIM: only from clustered type II(?)
+        try:
+            sn = read_hst(self.files['sn'], force_override=force_override)
+            t_ = np.array(hst['time'])
+            Nsn, snbin = np.histogram(sn.time, bins=np.concatenate(([t_[0]], t_)))
+            h['mass_snej'] = Nsn.cumsum()*self.par['feedback']['MejII'] # Mass of SN ejecta [Msun]
+        except:
+            pass
+
+        # star formation rates [Msun/yr]
+        h['sfr1'] = hst['sfr1']*(Lx*Ly/1e6)
+        h['sfr5'] = hst['sfr5']*(Lx*Ly/1e6)
+        h['sfr10'] = hst['sfr10']*(Lx*Ly/1e6)
+        h['sfr40'] = hst['sfr40']*(Lx*Ly/1e6)
+        h['sfr100'] = hst['sfr100']*(Lx*Ly/1e6)
+
+        h.index = h['time_code']
         
-        hst.index = hst['time_code']
-        
-        self.hst = hst
-        return hst
+        self.hst = h
+
+        return h
+
+    @LoadSim.Decorators.check_pickle_hst
+    def read_sn(self, savdir=None, force_override=False):
+        """Function to read sn dump and convert quantities to convenient units
+        """
+        # TODO
+        pass
