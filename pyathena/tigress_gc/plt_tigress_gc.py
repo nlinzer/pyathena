@@ -97,7 +97,7 @@ def plt_proj_density(s, num, fig, savfig=True):
         fig.savefig(osp.join(savdir, 'proj-density.{0:s}.{1:04d}.png'
             .format(s.basename, ds.num)),bbox_inches='tight')
 
-def plt_all(s, num, fig, savfig=True):
+def plt_all(s, num, fig, with_starpar=False, savfig=True):
     """
     Create large plot including density slice, density projection, temperature
     slice, phase diagram, star formation rate, and mass fractions.
@@ -105,16 +105,16 @@ def plt_all(s, num, fig, savfig=True):
 
     # create axes
     gs = GridSpec(3,5,figure=fig)
-    ax1 = fig.add_subplot(gs[0,0])
+    ax1 = fig.add_subplot(gs[0,0])               # density slice
     ax2 = fig.add_subplot(gs[1:,0], sharex=ax1)
-    ax3 = fig.add_subplot(gs[0,1])
+    ax3 = fig.add_subplot(gs[0,1])               # density projection
     ax4 = fig.add_subplot(gs[1:,1], sharex=ax3)
-    ax5 = fig.add_subplot(gs[0,2])
+    ax5 = fig.add_subplot(gs[0,2])               # temperature slice
     ax6 = fig.add_subplot(gs[1:,2], sharex=ax5)
-    ax7 = fig.add_subplot(gs[0,3])
-    ax8 = fig.add_subplot(gs[0,4])
-    ax9 = fig.add_subplot(gs[1,3:])
-    ax10 = fig.add_subplot(gs[2,3:], sharex=ax9)
+    ax7 = fig.add_subplot(gs[0,3])               # n-P phase diagram
+    ax8 = fig.add_subplot(gs[0,4])               # n-T phase diagram
+    ax9 = fig.add_subplot(gs[1,3:])              # SFR history
+    ax10 = fig.add_subplot(gs[2,3:], sharex=ax9) # mass history
     cax1 = make_axes_locatable(ax1).append_axes('right', size='5%', pad=0.05)
     cax2 = make_axes_locatable(ax2).append_axes('right', size='5%', pad=0.05)
     cax3 = make_axes_locatable(ax3).append_axes('right', size='5%', pad=0.05)
@@ -126,7 +126,6 @@ def plt_all(s, num, fig, savfig=True):
     ds = s.load_vtk(num=num)
     dat = ds.get_field(field=['density','pressure'], as_xarray=True)
     hst = s.read_hst(force_override=True)
-    sp = s.load_starpar_vtk(num=num)
     time = ds.domain['time']*s.u.Myr
     axis_idx = dict(x=0, y=1, z=2)
     
@@ -157,33 +156,35 @@ def plt_all(s, num, fig, savfig=True):
             vmin=1e-2, vmax=1e5, cbar_ax=cax4, add_labels=False,
             cbar_kwargs={'label':r"$\Sigma_{\rm gas}\,[M_\odot\,\rm pc^{-2}]$"})
     (dat['temperature'].interp(z=0)).plot.imshow(ax=ax5, norm=mpl.colors.LogNorm(),
-            cmap='coolwarm', vmin=1e1, vmax=1e7, cbar_ax=cax5, add_labels=False,
+            cmap='coolwarm', vmin=1e1, vmax=1e8, cbar_ax=cax5, add_labels=False,
             cbar_kwargs={'label':r"$T\,[\rm K]$"})
     (dat['temperature'].interp(y=0)).plot.imshow(ax=ax6, norm=mpl.colors.LogNorm(),
-            cmap='coolwarm', vmin=1e1, vmax=1e7, cbar_ax=cax6, add_labels=False,
+            cmap='coolwarm', vmin=1e1, vmax=1e8, cbar_ax=cax6, add_labels=False,
             cbar_kwargs={'label':r"$T\,[\rm K]$"})
 
-    # starpar
-    young_sp = sp[sp['age']*s.u.Myr < 40.]
-    young_cluster = young_sp[young_sp['mass'] != 0]
-    mass = young_cluster['mass']*s.u.Msun
-    age = young_cluster['age']*s.u.Myr
-    cl = ax3.scatter(young_cluster['x1'], young_cluster['x2'], marker='o',
-                     s=mass_norm(mass), c=age, edgecolor='black', linewidth=1,
-                     vmax=40, vmin=0, cmap=plt.cm.cool_r, zorder=2)
-    ss=[]
-    label=[]
-    ext = ax3.images[0].get_extent()
-    for mass in [1e4,1e5,1e6]:
-        ss.append(ax3.scatter(ext[1]*2,ext[3]*2,s=mass_norm(mass),color='k',alpha=.5))
-        label.append(r'$10^%d M_\odot$' % np.log10(mass))
-    ax3.set_xlim(ext[0], ext[1])
-    ax3.set_ylim(ext[3], ext[2])
-    ax3.legend(ss,label,scatterpoints=1,loc=2,ncol=3,bbox_to_anchor=(0.0, 1.2), frameon=False)
+    if with_starpar:
+        # starpar
+        sp = s.load_starpar_vtk(num=num)
+        young_sp = sp[sp['age']*s.u.Myr < 40.]
+        young_cluster = young_sp[young_sp['mass'] != 0]
+        mass = young_cluster['mass']*s.u.Msun
+        age = young_cluster['age']*s.u.Myr
+        cl = ax3.scatter(young_cluster['x1'], young_cluster['x2'], marker='o',
+                         s=mass_norm(mass), c=age, edgecolor='black', linewidth=1,
+                         vmax=40, vmin=0, cmap=plt.cm.cool_r, zorder=2)
+        ss=[]
+        label=[]
+        ext = ax3.images[0].get_extent()
+        for mass in [1e4,1e5,1e6]:
+            ss.append(ax3.scatter(ext[1]*2,ext[3]*2,s=mass_norm(mass),color='k',alpha=.5))
+            label.append(r'$10^%d M_\odot$' % np.log10(mass))
+        ax3.set_xlim(ext[0], ext[1])
+        ax3.set_ylim(ext[3], ext[2])
+        ax3.legend(ss,label,scatterpoints=1,loc=2,ncol=3,bbox_to_anchor=(0.0, 1.2), frameon=False)
 
-    cax = fig.add_axes([0.15,0.93,0.25,0.015])
-    cbar = plt.colorbar(cl, ticks=[0,20,40], cax=cax, orientation='horizontal')
-    cbar.ax.set_title(r'$age\,[\rm Myr]$')
+        cax = fig.add_axes([0.15,0.93,0.25,0.015])
+        cbar = plt.colorbar(cl, ticks=[0,20,40], cax=cax, orientation='horizontal')
+        cbar.ax.set_title(r'$age\,[\rm Myr]$')
 
     # phase diagram
     histnP,xedgnP,yedgnP = np.histogram2d(
