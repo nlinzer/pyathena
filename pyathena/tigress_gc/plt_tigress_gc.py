@@ -21,6 +21,35 @@ from ..io.read_hst import read_hst
 from ..io.read_starpar_vtk import read_starpar_vtk
 from ..util.units import Units
 
+def _get_histogram(s, num):
+    # load vtk and hst files
+    ds = s.load_vtk(num=num)
+    dat = ds.get_field(field=['density','pressure'], as_xarray=True)
+    time = ds.domain['time']*s.u.Myr
+    axis_idx = dict(x=0, y=1, z=2)
+
+    # prepare variables to be plotted
+    dat['pok'] = dat['pressure']*s.u.pok
+    # T_1 = (p/k) / (rho m_p) is the temperature assuming mu=1
+    dat['T1'] = dat['pok']/(dat['density']*s.u.muH)
+    dat['temperature'] = xr.DataArray(coolftn().get_temp(dat['T1'].values),
+            coords=dat['T1'].coords, dims=dat['T1'].dims)
+
+    # phase diagram
+    hist_nP,xedge_nP,yedge_nP = np.histogram2d(
+            np.log10(np.array(dat['density']).flatten()),
+            np.log10(np.array(dat['pok']).flatten()), bins=200,
+            range=[[-3,5],[2,8]],density=True,
+            weights=np.array(dat['density']).flatten())
+    hist_nT,xedge_nT,yedge_nT = np.histogram2d(
+            np.log10(np.array(dat['density']).flatten()),
+            np.log10(np.array(dat['temperature']).flatten()), bins=200,
+            range=[[-3,5],[1,7]],density=True,
+            weights=np.array(dat['density']).flatten())
+
+    return hist_nP, xedge_nP, yedge_nP, hist_nT, xedge_nT, yedge_nT
+
+
 def mass_norm(mass):
     '''
     Mass normlization function to determine symbol size
