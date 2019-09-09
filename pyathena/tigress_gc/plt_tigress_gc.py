@@ -237,15 +237,15 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
 
     # history
 
-    if s.basename in ["M0.1_1pc", "M0.1_2pc", "M0.1_4pc"]:
+    if "M0.1" in s.basename:
         Mdot = 0.1
         sfrlim = [1e-2,1e0]
         masslim = [1e5,1e7]
-    elif s.basename in ["M1_1pc", "M1_2pc", "M1_4pc", "LE.M1_2pc", "EF.LE.M1_2pc"]:
+    elif "M1" in s.basename:
         Mdot = 1
         sfrlim = [1e-1,1e1]
         masslim = [1e6,1e8]
-    elif s.basename in ["M10_1pc", "M10_2pc", "M10_4pc"]:
+    elif "M10" in s.basename:
         Mdot = 10
         sfrlim = [1e0,1e2]
         masslim = [1e6,1e8]
