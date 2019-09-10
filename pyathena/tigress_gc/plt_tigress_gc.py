@@ -281,7 +281,7 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     plt.subplots_adjust(left=0.02, right=0.98, top=0.87, bottom=0.1)
 
     if savfig:
-        savdir = osp.join('./figures-all')
+        savdir = osp.join('./figures-all', s.basename)
         if not os.path.exists(savdir):
             os.makedirs(savdir)
         fig.savefig(osp.join(savdir, 'all.{0:s}.{1:04d}.png'
