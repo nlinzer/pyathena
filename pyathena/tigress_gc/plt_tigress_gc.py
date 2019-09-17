@@ -193,27 +193,31 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
 
     if with_starpar:
         # starpar
-        sp = s.load_starpar_vtk(num=num)
-        young_sp = sp[sp['age']*s.u.Myr < 40.]
-        young_cluster = young_sp[young_sp['mass'] != 0]
-        mass = young_cluster['mass']*s.u.Msun
-        age = young_cluster['age']*s.u.Myr
-        cl = ax3.scatter(young_cluster['x1'], young_cluster['x2'], marker='o',
-                         s=mass_norm(mass), c=age, edgecolor='black', linewidth=1,
-                         vmax=40, vmin=0, cmap=plt.cm.cool_r, zorder=2)
-        ss=[]
-        label=[]
-        ext = ax3.images[0].get_extent()
-        for mass in [1e4,1e5,1e6]:
-            ss.append(ax3.scatter(ext[1]*2,ext[3]*2,s=mass_norm(mass),color='k',alpha=.5))
-            label.append(r'$10^%d M_\odot$' % np.log10(mass))
-        ax3.set_xlim(ext[0], ext[1])
-        ax3.set_ylim(ext[3], ext[2])
-        ax3.legend(ss,label,scatterpoints=1,loc=2,ncol=3,bbox_to_anchor=(0.0, 1.2), frameon=False)
+        try:
+            sp = s.load_starpar_vtk(num=num)
+            young_sp = sp[sp['age']*s.u.Myr < 40.]
+            young_cluster = young_sp[young_sp['mass'] != 0]
+            mass = young_cluster['mass']*s.u.Msun
+            age = young_cluster['age']*s.u.Myr
+            cl = ax3.scatter(young_cluster['x1'], young_cluster['x2'], marker='o',
+                             s=mass_norm(mass), c=age, edgecolor='black', linewidth=1,
+                             vmax=40, vmin=0, cmap=plt.cm.cool_r, zorder=2)
+            ss=[]
+            label=[]
+            ext = ax3.images[0].get_extent()
+            for mass in [1e4,1e5,1e6]:
+                ss.append(ax3.scatter(ext[1]*2,ext[3]*2,s=mass_norm(mass),color='k',alpha=.5))
+                label.append(r'$10^%d M_\odot$' % np.log10(mass))
+            ax3.set_xlim(ext[0], ext[1])
+            ax3.set_ylim(ext[3], ext[2])
+            ax3.legend(ss,label,scatterpoints=1,loc=2,ncol=3,bbox_to_anchor=(0.0, 1.2), frameon=False)
 
-        cax = fig.add_axes([0.15,0.93,0.25,0.015])
-        cbar = plt.colorbar(cl, ticks=[0,20,40], cax=cax, orientation='horizontal')
-        cbar.ax.set_title(r'$age\,[\rm Myr]$')
+            cax = fig.add_axes([0.15,0.93,0.25,0.015])
+            cbar = plt.colorbar(cl, ticks=[0,20,40], cax=cax, orientation='horizontal')
+            cbar.ax.set_title(r'$age\,[\rm Myr]$')
+        except:
+            # TODO this should catch proper exception
+            pass
 
     # phase diagram
     histnP,xedgnP,yedgnP = np.histogram2d(
