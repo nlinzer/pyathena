@@ -114,5 +114,43 @@ class ReadHst:
     def read_sn(self, savdir=None, force_override=False):
         """Function to read sn dump and convert quantities to convenient units
         """
-        # TODO
-        pass
+
+        # Orbital time at the bulge scale length rb
+        rb = 120
+        time_orb = ((2*np.pi*rb*au.pc)/(vcirc(rb)*au.km/au.s)).to('Myr').value
+
+        hst = read_hst(self.files['sn'], force_override=force_override)
+
+        h = pd.DataFrame()
+
+        h['id'] = hst['id']
+        # Time in code unit
+        h['time_code'] = hst['time']
+        # Time in Myr
+        h['time'] = hst['time']*u.Myr
+        # Time in orbital time
+        h['time_orb'] = h['time']/time_orb
+        # starpar age
+        h['age'] = hst['age']*u.Myr
+        # mass-weighted starpar age
+        h['mage'] = hst['mage']*u.Myr
+        # starpar mass
+        h['mass'] = hst['mass']*u.Msun
+        # position
+        h['x1'] = hst['x1']
+        h['x2'] = hst['x2']
+        h['x3'] = hst['x3']
+        # sn position TODO Why they are same with x1,x2,x3?
+        h['x1sn'] = hst['x1sn']
+        h['x2sn'] = hst['x2sn']
+        h['x3sn'] = hst['x3sn']
+        # feedback mode
+        h['mode'] = hst['mode']
+        # fm_sedov = 0.1
+        h['fm'] = hst['fm']
+
+        h.index = h['time_code']
+        
+        self.sn = h
+
+        return h
