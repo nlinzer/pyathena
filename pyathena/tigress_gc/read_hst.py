@@ -110,10 +110,11 @@ class ReadHst:
 
         return h
 
-    @LoadSim.Decorators.check_pickle_hst
     def read_sn(self, savdir=None, force_override=False):
         """Function to read sn dump and convert quantities to convenient units
         """
+
+        u = self.u
 
         # Orbital time at the bulge scale length rb
         rb = 120
