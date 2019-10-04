@@ -60,6 +60,8 @@ def create_Rzprof(s, num, iphase):
         phase = (dat0['temperature'] > Tcold)&(dat0['temperature'] < Thot1)
     elif iphase==7: # warm+unstable+cold
         phase = dat0['temperature'] < Thot1
+    elif iphase==8: # unstable+cold
+        phase = dat0['temperature'] < Twarm
     else:
         raise Exception("invalid iphase")
 
