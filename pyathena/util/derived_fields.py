@@ -24,3 +24,9 @@ def add_derived_fields(s, dat, fields):
         T1 = pok/dat.density*s.u.muH
         dat['T'] = xr.DataArray(cf.get_temp(T1.values), coords=T1.coords,
                 dims=T1.dims)
+    if 'gz_sg' in fields:
+        phir = dat.gravitational_potential.shift(z=-1)
+        phil = dat.gravitational_potential.shift(z=1)
+        phir.loc[{'z':phir.z[-1]}] = 3*phir.isel(z=-2) - 3*phir.isel(z=-3) + phir.isel(z=-4)
+        phil.loc[{'z':phir.z[0]}] = 3*phil.isel(z=1) - 3*phil.isel(z=2) + phil.isel(z=3)
+        dat['gz_sg'] = (phil-phir)/s.domain['dx'][2]
