@@ -8,7 +8,6 @@ from scipy import integrate
 
 from ..io.read_hst import read_hst
 from ..load_sim import LoadSim
-from .pot import vcirc
 
 
 class ReadHst:
@@ -32,10 +31,6 @@ class ReadHst:
         # area of domain
         area = [Ly*Lz, Lz*Lx, Lx*Ly]
 
-        # Orbital time at the bulge scale length rb
-        rb = 120
-        time_orb = ((2*np.pi*rb*au.pc)/(vcirc(rb)*au.km/au.s)).to('Myr').value
-
         hst = read_hst(self.files['hst'], force_override=force_override)
 
         h = pd.DataFrame()
@@ -44,8 +39,6 @@ class ReadHst:
         h['time_code'] = hst['time']
         # Time in Myr
         h['time'] = hst['time']*u.Myr
-        # Time in orbital time
-        h['time_orb'] = h['time']/time_orb
 
         # Total gas mass in Msun
         h['mass'] = hst['mass']*vol*u.Msun
@@ -104,8 +97,6 @@ class ReadHst:
         h['sfr40'] = hst['sfr40']*(Lx*Ly/1e6)
         h['sfr100'] = hst['sfr100']*(Lx*Ly/1e6)
 
-        h.index = h['time_code']
-        
         self.hst = h
 
         return h
@@ -116,10 +107,6 @@ class ReadHst:
 
         u = self.u
 
-        # Orbital time at the bulge scale length rb
-        rb = 120
-        time_orb = ((2*np.pi*rb*au.pc)/(vcirc(rb)*au.km/au.s)).to('Myr').value
-
         hst = read_hst(self.files['sn'], force_override=force_override)
 
         h = pd.DataFrame()
@@ -129,8 +116,6 @@ class ReadHst:
         h['time_code'] = hst['time']
         # Time in Myr
         h['time'] = hst['time']*u.Myr
-        # Time in orbital time
-        h['time_orb'] = h['time']/time_orb
         # starpar age
         h['age'] = hst['age']*u.Myr
         # mass-weighted starpar age
@@ -150,8 +135,6 @@ class ReadHst:
         # fm_sedov = 0.1
         h['fm'] = hst['fm']
 
-        h.index = h['time_code']
-        
         self.sn = h
 
         return h
