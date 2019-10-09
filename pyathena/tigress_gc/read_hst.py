@@ -130,6 +130,8 @@ class ReadHst:
         h['x1sn'] = hst['x1sn']
         h['x2sn'] = hst['x2sn']
         h['x3sn'] = hst['x3sn']
+        # average density at the explosion site
+        h['navg'] = hst['navg']
         # feedback mode
         h['mode'] = hst['mode']
         # fm_sedov = 0.1
