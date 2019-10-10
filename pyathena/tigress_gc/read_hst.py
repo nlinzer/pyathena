@@ -102,41 +102,7 @@ class ReadHst:
         return h
 
     def read_sn(self, savdir=None, force_override=False):
-        """Function to read sn dump and convert quantities to convenient units
-        """
-
-        u = self.u
-
-        hst = read_hst(self.files['sn'], force_override=force_override)
-
-        h = pd.DataFrame()
-
-        h['id'] = hst['id']
-        # Time in code unit
-        h['time_code'] = hst['time']
-        # Time in Myr
-        h['time'] = hst['time']*u.Myr
-        # starpar age
-        h['age'] = hst['age']*u.Myr
-        # mass-weighted starpar age
-        h['mage'] = hst['mage']*u.Myr
-        # starpar mass
-        h['mass'] = hst['mass']*u.Msun
-        # position
-        h['x1'] = hst['x1']
-        h['x2'] = hst['x2']
-        h['x3'] = hst['x3']
-        # sn position TODO Why they are same with x1,x2,x3?
-        h['x1sn'] = hst['x1sn']
-        h['x2sn'] = hst['x2sn']
-        h['x3sn'] = hst['x3sn']
-        # average density at the explosion site
-        h['navg'] = hst['navg']
-        # feedback mode
-        h['mode'] = hst['mode']
-        # fm_sedov = 0.1
-        h['fm'] = hst['fm']
-
+        """Load sn dump"""
+        h = read_hst(self.files['sn'], force_override=force_override)
         self.sn = h
-
         return h
