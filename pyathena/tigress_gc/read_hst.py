@@ -58,8 +58,8 @@ class ReadHst:
                      *self.u.length**2).to("Msun/Myr").value
             h['mass_in'] = Mdot*h['time']
         else:
-            #TODO time varying inflow
-            pass
+            dT = self.par['problem']['iflw_dT']*self.u.Myr
+            h['mass_in'] = 0.55*h['time'] + dT/(2*np.pi)*0.45*np.sin(2*np.pi*h['time']/dT)
 
         # Total outflow mass
         h['mass_out1'] = 0

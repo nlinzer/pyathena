@@ -253,12 +253,28 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
         Mdot = 10
         sfrlim = [1e0,1e2]
         masslim = [1e6,1e8]
+    elif "V10" in s.basename:
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/10)
+        sfrlim = [5e-2,5e0]
+        masslim = [5e5,5e7]
+    elif "V50" in s.basename:
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/50)
+        sfrlim = [5e-2,5e0]
+        masslim = [5e5,5e7]
+    elif "V100" in s.basename:
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/100)
+        sfrlim = [5e-2,5e0]
+        masslim = [5e5,5e7]
+    elif "V200" in s.basename:
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/200)
+        sfrlim = [5e-2,5e0]
+        masslim = [5e5,5e7]
     else:
         raise Exception("set appropriate yranges for the model {}".format(s.basename))
 
+    ax9.semilogy(hst['time'], hst['sfr1'], 'm-', label='sfr1')
     ax9.semilogy(hst['time'], hst['sfr10'], 'r-', label='sfr10')
     ax9.semilogy(hst['time'], hst['sfr40'], 'g-', label='sfr40')
-    ax9.semilogy(hst['time'], hst['sfr100'], 'm-', label='sfr100')
     ax9.semilogy(hst['time'], Mdot*np.ones(len(hst['time'])), 'k--', label='inflow')
     ax9.set_xlabel("time"+r"$\,[{\rm Myr}]$")
     ax9.set_ylabel("SFR"+r"$\,[M_\odot\,{\rm yr}^{-1}]$")
