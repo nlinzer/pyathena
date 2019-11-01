@@ -202,7 +202,7 @@ class AthenaDataSet(object):
         return slc
 
     def get_field(self, field='density', le=None, re=None,
-                  as_xarray=False):
+                  as_xarray=True):
         """Read fields data.
 
         Parameters
