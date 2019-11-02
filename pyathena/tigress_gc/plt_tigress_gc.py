@@ -21,6 +21,9 @@ from ..io.read_hst import read_hst
 from ..io.read_starpar_vtk import read_starpar_vtk
 from ..util.units import Units
 
+from pygc.threshold import LPthres
+lp = LPthres()
+
 def _get_histogram(s, num):
     # load vtk and hst files
     ds = s.load_vtk(num=num)
@@ -238,6 +241,14 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     ax7.set_ylabel(r'$P/k_{\rm B}\,[{\rm K\,cm^{-3}}]$')
     ax8.set_xlabel(r'$n_{\rm H}\,[{\rm cm}^{-3}]$')
     ax8.set_ylabel(r'$T\,[{\rm K}]$')
+
+    # overplot LP threshold
+    T = np.logspace(np.log10(12.95), 5)
+    dx = s.domain['dx'][0]
+    nth = lp.get_rhoLPeq(dx, T)
+    ax8.plot(np.log10(nth), np.log10(T), 'r--')
+    prs = lp.get_prs(nth, T)
+    ax7.plot(np.log10(nth), np.log10(prs), 'r--')
 
     # history
 
