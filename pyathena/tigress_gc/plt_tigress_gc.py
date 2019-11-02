@@ -245,7 +245,7 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
         Mdot = 0.01
         sfrlim = [1e-3,1e1]
         masslim = [1e4,1e6]
-    elif "M0.1" in s.basename:
+    elif "M01" in s.basename:
         Mdot = 0.1
         sfrlim = [1e-2,1e0]
         masslim = [1e5,1e7]
