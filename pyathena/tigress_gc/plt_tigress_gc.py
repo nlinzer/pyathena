@@ -247,8 +247,16 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     dx = s.domain['dx'][0]
     nth = lp.get_rhoLPeq(dx, T)
     ax8.plot(np.log10(nth), np.log10(T), 'r--')
+    ax8.plot(np.log10(10*nth), np.log10(T), 'r--')
+    ax8.plot(np.log10(100*nth), np.log10(T), 'r--')
     prs = lp.get_prs(nth, T)
     ax7.plot(np.log10(nth), np.log10(prs), 'r--')
+    ax7.plot(np.log10(10*nth), np.log10(prs), 'r--')
+    ax7.plot(np.log10(100*nth), np.log10(prs), 'r--')
+    ax7.set_xlim([xedgnP[0], xedgnP[-1]])
+    ax7.set_ylim([yedgnP[0], yedgnP[-1]])
+    ax8.set_xlim([xedgnT[0], xedgnT[-1]])
+    ax8.set_ylim([yedgnT[0], yedgnT[-1]])
 
     # history
 
