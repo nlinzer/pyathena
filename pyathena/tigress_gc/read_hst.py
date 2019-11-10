@@ -16,7 +16,6 @@ class ReadHst:
     def read_hst(self, savdir=None, force_override=False):
         """Function to read hst and convert quantities to convenient units
         """
-    
         u = self.u
         domain = self.domain
 
@@ -28,8 +27,6 @@ class ReadHst:
         Lx = domain['Lx'][0]
         Ly = domain['Lx'][1]
         Lz = domain['Lx'][2]
-        # area of domain
-        area = [Ly*Lz, Lz*Lx, Lx*Ly]
 
         hst = read_hst(self.files['hst'], force_override=force_override)
 
@@ -56,29 +53,41 @@ class ReadHst:
                      *self.par['problem']['iflw_mu']*self.par['problem']['iflw_w']\
                      *self.par['problem']['iflw_h']*self.u.density*self.u.velocity\
                      *self.u.length**2).to("Msun/Myr").value
+            h['mdot_in'] = Mdot
             h['mass_in'] = Mdot*h['time']
         else:
             dT = self.par['problem']['iflw_dT']*self.u.Myr
             h['mass_in'] = 0.55*h['time'] + dT/(2*np.pi)*0.45*np.sin(2*np.pi*h['time']/dT)
 
-        # Total outflow mass
-        h['mass_out1'] = 0
-        h['mass_out2'] = 0
-        h['mass_out3'] = 0
-        for i, direction in enumerate(['F1','F2','F3']):
-            flux = ((hst[direction+'_upper'] - hst[direction+'_lower']).to_numpy()
-                    *area[i]*u.mass_flux*u.length**2).to("Msun/Myr").value
-            h['flux'+str(i+1)] = flux
-            h['mass_out'+str(i+1)] += integrate.cumtrapz(flux, h['time'], initial=0.0)
-        h['mass_out2'] += h['mass_in']
+        # flux
+        h['F1h2'] = hst['F1h2']*u.Msun/u.Myr
+        h['F1h1'] = hst['F1h1']*u.Msun/u.Myr
+        h['F1w'] = hst['F1w']*u.Msun/u.Myr
+        h['F1u'] = hst['F1u']*u.Msun/u.Myr
+        h['F1c'] = hst['F1c']*u.Msun/u.Myr
+        h['F1_2p'] = h['F1w']+h['F1u']+h['F1c']
+        h['F1'] = h['F1h2']+h['F1h1']+h['F1_2p']
+
+        h['F2h2'] = hst['F2h2']*u.Msun/u.Myr
+        h['F2h1'] = hst['F2h1']*u.Msun/u.Myr
+        h['F2w'] = hst['F2w']*u.Msun/u.Myr
+        h['F2u'] = hst['F2u']*u.Msun/u.Myr
+        h['F2c'] = hst['F2c']*u.Msun/u.Myr
+        h['F2_2p'] = h['F2w']+h['F2u']+h['F2c']
+        h['F2'] = h['F2h2']+h['F2h1']+h['F2_2p']
+
+        h['F3h2'] = hst['F3h2']*u.Msun/u.Myr
+        h['F3h1'] = hst['F3h1']*u.Msun/u.Myr
+        h['F3w'] = hst['F3w']*u.Msun/u.Myr
+        h['F3u'] = hst['F3u']*u.Msun/u.Myr
+        h['F3c'] = hst['F3c']*u.Msun/u.Myr
+        h['F3_2p'] = h['F3w']+h['F3u']+h['F3c']
+        h['F3'] = h['F3h2']+h['F3h1']+h['F3_2p']
 
         # Total outflow mass
-        h['mass_out'] = 0
-        for i, direction in enumerate(['F1','F2','F3']):
-            flux = ((hst[direction+'_upper'] - hst[direction+'_lower']).to_numpy()
-                    *area[i]*u.mass_flux*u.length**2).to("Msun/Myr").value
-            h['mass_out'] += integrate.cumtrapz(flux, h['time'], initial=0.0)
-        h['mass_out'] += h['mass_in']
+        h['mass_out1'] = integrate.cumtrapz(h['F1'], h['time'], initial=0.0)*Ly*Lz
+        h['mass_out2'] = integrate.cumtrapz(h['F2'], h['time'], initial=0.0)*Lz*Lx
+        h['mass_out3'] = integrate.cumtrapz(h['F3'], h['time'], initial=0.0)*Lx*Ly
 
 #        # Calculate (cumulative) SN ejecta mass
 #        # JKIM: only from clustered type II(?)
