@@ -247,12 +247,12 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     dx = s.domain['dx'][0]
     nth = lp.get_rhoLPeq(dx, T)
     ax8.plot(np.log10(nth), np.log10(T), 'r--')
-    ax8.plot(np.log10(10*nth), np.log10(T), 'r--')
-    ax8.plot(np.log10(100*nth), np.log10(T), 'r--')
+#    ax8.plot(np.log10(10*nth), np.log10(T), 'r--')
+#    ax8.plot(np.log10(100*nth), np.log10(T), 'r--')
     prs = lp.get_prs(nth, T)
     ax7.plot(np.log10(nth), np.log10(prs), 'r--')
-    ax7.plot(np.log10(10*nth), np.log10(prs), 'r--')
-    ax7.plot(np.log10(100*nth), np.log10(prs), 'r--')
+#    ax7.plot(np.log10(10*nth), np.log10(prs), 'r--')
+#    ax7.plot(np.log10(100*nth), np.log10(prs), 'r--')
     ax7.set_xlim([xedgnP[0], xedgnP[-1]])
     ax7.set_ylim([yedgnP[0], yedgnP[-1]])
     ax8.set_xlim([xedgnT[0], xedgnT[-1]])
@@ -262,7 +262,7 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
 
     if "M001" in s.basename:
         Mdot = 0.01
-        sfrlim = [1e-3,1e1]
+        sfrlim = [1e-3,1e-1]
         masslim = [1e4,1e6]
     elif "M01" in s.basename:
         Mdot = 0.1
