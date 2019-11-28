@@ -135,6 +135,55 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     slice, phase diagram, star formation rate, and mass fractions.
     """
 
+    dmin = 1e-2
+    dmax = 1e3
+    sxymin = 1e0
+    sxymax = 1e3
+    sxzmin = 1e-2
+    sxzmax = 1e4
+    if "M001_" in s.basename:
+        Mdot = 0.01
+        sfrlim = [1e-3,1e-1]
+        masslim = [1e4,1e6]
+    elif ("M01_" in s.basename)|("L01" in s.basename):
+        Mdot = 0.1
+        sfrlim = [1e-2,1e0]
+        masslim = [1e5,1e7]
+    elif ("M02_" in s.basename)|("L02" in s.basename):
+        Mdot = 0.2
+        sfrlim = [1e-2,1e0]
+        masslim = [1e5,1e7]
+    elif ("M1_" in s.basename)|("L1" in s.basename):
+        Mdot = 1
+        sfrlim = [1e-1,1e1]
+        masslim = [1e6,1e8]
+    elif ("M5_" in s.basename)|("L5" in s.basename):
+        Mdot = 5
+        sfrlim = [1e0,1e2]
+        masslim = [1e6,1e8]
+    elif ("M10_" in s.basename)|("L10" in s.basename):
+        Mdot = 10
+        sfrlim = [1e0,1e2]
+        masslim = [1e6,1e8]
+    elif "V10_" in s.basename:
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/10)
+        sfrlim = [5e-2,5e0]
+        masslim = [5e5,5e7]
+    elif "V50_" in s.basename:
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/50)
+        sfrlim = [5e-2,5e0]
+        masslim = [5e5,5e7]
+    elif "V100_" in s.basename:
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/100)
+        sfrlim = [5e-2,5e0]
+        masslim = [5e5,5e7]
+    elif "V200_" in s.basename:
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/200)
+        sfrlim = [5e-2,5e0]
+        masslim = [5e5,5e7]
+    else:
+        raise Exception("set appropriate yranges for the model {}".format(s.basename))
+
     # create axes
     gs = GridSpec(3,5,figure=fig)
     ax1 = fig.add_subplot(gs[0,0])               # density slice
@@ -176,16 +225,16 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
 
     # gas
     (dat['density'].interp(z=0)).plot.imshow(ax=ax1, norm=mpl.colors.LogNorm(),
-            cmap='viridis', vmin=1e0, vmax=1e4, cbar_ax=cax1, add_labels=False,
+            cmap='viridis', vmin=dmin, vmax=dmax, cbar_ax=cax1, add_labels=False,
             cbar_kwargs={'label':r"$n_{\rm H}\,[\rm cm^{-3}]$"})
     (dat['density'].interp(y=0)).plot.imshow(ax=ax2, norm=mpl.colors.LogNorm(),
-            cmap='viridis', vmin=1e-2, vmax=1e4, cbar_ax=cax2, add_labels=False,
+            cmap='viridis', vmin=dmin, vmax=dmax, cbar_ax=cax2, add_labels=False,
             cbar_kwargs={'label':r"$n_{\rm H}\,[\rm cm^{-3}]$"})
     dat['surf_xy'].plot.imshow(ax=ax3, norm=mpl.colors.LogNorm(), cmap='pink_r',
-            vmin=1e0, vmax=1e4, cbar_ax=cax3, add_labels=False,
+            vmin=sxymin, vmax=sxymax, cbar_ax=cax3, add_labels=False,
             cbar_kwargs={'label':r"$\Sigma_{\rm gas}\,[M_\odot\,\rm pc^{-2}]$"})
     dat['surf_xz'].plot.imshow(ax=ax4, norm=mpl.colors.LogNorm(), cmap='pink_r',
-            vmin=1e-2, vmax=1e5, cbar_ax=cax4, add_labels=False,
+            vmin=sxzmin, vmax=sxzmax, cbar_ax=cax4, add_labels=False,
             cbar_kwargs={'label':r"$\Sigma_{\rm gas}\,[M_\odot\,\rm pc^{-2}]$"})
     (dat['temperature'].interp(z=0)).plot.imshow(ax=ax5, norm=mpl.colors.LogNorm(),
             cmap='coolwarm', vmin=1e1, vmax=1e8, cbar_ax=cax5, add_labels=False,
@@ -259,50 +308,6 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     ax8.set_ylim([yedgnT[0], yedgnT[-1]])
 
     # history
-
-    if "M001_" in s.basename:
-        Mdot = 0.01
-        sfrlim = [1e-3,1e-1]
-        masslim = [1e4,1e6]
-    elif "M01_" in s.basename:
-        Mdot = 0.1
-        sfrlim = [1e-2,1e0]
-        masslim = [1e5,1e7]
-    elif "M1_" in s.basename:
-        Mdot = 1
-        sfrlim = [1e-1,1e1]
-        masslim = [1e6,1e8]
-    elif "M10_" in s.basename:
-        Mdot = 10
-        sfrlim = [1e0,1e2]
-        masslim = [1e6,1e8]
-    elif "V10_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/10)
-        sfrlim = [5e-2,5e0]
-        masslim = [5e5,5e7]
-    elif "V50_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/50)
-        sfrlim = [5e-2,5e0]
-        masslim = [5e5,5e7]
-    elif "V100_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/100)
-        sfrlim = [5e-2,5e0]
-        masslim = [5e5,5e7]
-    elif "V200_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/200)
-        sfrlim = [5e-2,5e0]
-        masslim = [5e5,5e7]
-    elif "G01_" in s.basename:
-        Mdot = 0.1
-        sfrlim = [1e-2,1e0]
-        masslim = [1e5,1e7]
-    elif "G001_" in s.basename:
-        Mdot = 0.1
-        sfrlim = [1e-2,1e0]
-        masslim = [1e5,1e7]
-    else:
-        raise Exception("set appropriate yranges for the model {}".format(s.basename))
-
     ax9.semilogy(hst['time'], hst['sfr1'], 'm-', label='sfr1')
     ax9.semilogy(hst['time'], hst['sfr10'], 'r-', label='sfr10')
     ax9.semilogy(hst['time'], hst['sfr40'], 'g-', label='sfr40')
