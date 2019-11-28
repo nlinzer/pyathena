@@ -134,6 +134,12 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     Create large plot including density slice, density projection, temperature
     slice, phase diagram, star formation rate, and mass fractions.
     """
+    # load vtk and hst files
+    ds = s.load_vtk(num=num)
+    dat = ds.get_field(field=['density','pressure'], as_xarray=True)
+    hst = s.read_hst(force_override=True)
+    time = ds.domain['time']*s.u.Myr
+    axis_idx = dict(x=0, y=1, z=2)
 
     dmin = 1e-2
     dmax = 1e3
@@ -166,19 +172,19 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
         sfrlim = [1e0,1e2]
         masslim = [1e6,1e8]
     elif "V10_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/10)
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']*s.u.Myr/10)
         sfrlim = [5e-2,5e0]
         masslim = [5e5,5e7]
     elif "V50_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/50)
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']*s.u.Myr/50)
         sfrlim = [5e-2,5e0]
         masslim = [5e5,5e7]
     elif "V100_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/100)
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']*s.u.Myr/100)
         sfrlim = [5e-2,5e0]
         masslim = [5e5,5e7]
     elif "V200_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']/200)
+        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']*s.u.Myr/200)
         sfrlim = [5e-2,5e0]
         masslim = [5e5,5e7]
     else:
@@ -203,13 +209,6 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     cax5 = make_axes_locatable(ax5).append_axes('right', size='5%', pad=0.05)
     cax6 = make_axes_locatable(ax6).append_axes('right', size='5%', pad=0.05)
 
-    # load vtk and hst files
-    ds = s.load_vtk(num=num)
-    dat = ds.get_field(field=['density','pressure'], as_xarray=True)
-    hst = s.read_hst(force_override=True)
-    time = ds.domain['time']*s.u.Myr
-    axis_idx = dict(x=0, y=1, z=2)
-    
     # prepare variables to be plotted
     dat['pok'] = dat['pressure']*s.u.pok
     # T_1 = (p/k) / (rho m_p) is the temperature assuming mu=1
@@ -308,20 +307,21 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     ax8.set_ylim([yedgnT[0], yedgnT[-1]])
 
     # history
-    ax9.semilogy(hst['time'], hst['sfr1'], 'm-', label='sfr1')
-    ax9.semilogy(hst['time'], hst['sfr10'], 'r-', label='sfr10')
-    ax9.semilogy(hst['time'], hst['sfr40'], 'g-', label='sfr40')
-    ax9.semilogy(hst['time'], Mdot*np.ones(len(hst['time'])), 'k--', label='inflow')
+    ax9.semilogy(hst['time']*s.u.Myr, hst['sfr1'], 'm-', label='sfr1')
+    ax9.semilogy(hst['time']*s.u.Myr, hst['sfr10'], 'r-', label='sfr10')
+    ax9.semilogy(hst['time']*s.u.Myr, hst['sfr40'], 'g-', label='sfr40')
+    ax9.semilogy(hst['time']*s.u.Myr, Mdot*np.ones(len(hst['time']*s.u.Myr))
+        , 'k--', label='inflow')
     ax9.set_xlabel("time"+r"$\,[{\rm Myr}]$")
     ax9.set_ylabel("SFR"+r"$\,[M_\odot\,{\rm yr}^{-1}]$")
     ax9.set_ylim(sfrlim)
     ax9.plot([time,time],sfrlim,'y-',lw=5)
     ax9.legend()
-    ax10.semilogy(hst['time'], hst['Mc'], 'b-', label=r"$M_c$")
-    ax10.semilogy(hst['time'], hst['Mu'], 'g-', label=r"$M_u$")
-    ax10.semilogy(hst['time'], hst['Mw'], 'r-', label=r"$M_w$")
-    ax10.semilogy(hst['time'], hst['mass'], 'k-', label=r"$M_{\rm tot}$")
-    ax10.semilogy(hst['time'], hst['msp'], 'k--', label=r"$M_{\rm sp}$")
+    ax10.semilogy(hst['time']*s.u.Myr, hst['Mc']*s.u.Msun, 'b-', label=r"$M_c$")
+    ax10.semilogy(hst['time']*s.u.Myr, hst['Mu']*s.u.Msun, 'g-', label=r"$M_u$")
+    ax10.semilogy(hst['time']*s.u.Myr, hst['Mw']*s.u.Msun, 'r-', label=r"$M_w$")
+    ax10.semilogy(hst['time']*s.u.Myr, hst['mass']*s.u.Msun, 'k-', label=r"$M_{\rm tot}$")
+    ax10.semilogy(hst['time']*s.u.Myr, hst['msp']*s.u.Msun, 'k--', label=r"$M_{\rm sp}$")
     ax10.set_xlabel("time"+r"$\,[{\rm Myr}]$")
     ax10.set_ylabel("mass"+r"$\,[M_\odot]$")
     ax10.set_ylim(masslim)
@@ -374,18 +374,18 @@ def plt_history(s, fig, savfig=False):
     # plot
 
     # history
-    ax1.semilogy(hst['time'], hst['sfr1'], 'r-', label='sfr1')
-    ax1.semilogy(hst['time'], hst['sfr5'], 'g-', label='sfr5')
-    ax1.semilogy(hst['time'], hst['sfr10'], 'b-', label='sfr10')
-    ax1.semilogy(hst['time'], hst['sfr40'], 'm-', label='sfr40')
+    ax1.semilogy(hst['time']*s.u.Myr, hst['sfr1'], 'r-', label='sfr1')
+    ax1.semilogy(hst['time']*s.u.Myr, hst['sfr5'], 'g-', label='sfr5')
+    ax1.semilogy(hst['time']*s.u.Myr, hst['sfr10'], 'b-', label='sfr10')
+    ax1.semilogy(hst['time']*s.u.Myr, hst['sfr40'], 'm-', label='sfr40')
     ax1.set_ylabel("SFR ["+r"$M_\odot\,{\rm yr}^{-1}$"+"]")
     ax1.set_ylim(sfrlim)
     ax1.legend()
-    ax2.semilogy(hst['time'], hst['Mc'], 'b-', label=r"$M_c$")
-    ax2.semilogy(hst['time'], hst['Mu'], 'g-', label=r"$M_u$")
-    ax2.semilogy(hst['time'], hst['Mw'], 'r-', label=r"$M_w$")
-    ax2.semilogy(hst['time'], hst['mass'], 'k-', label=r"$M_{\rm tot}$")
-    ax2.semilogy(hst['time'], hst['msp'], 'k--', label=r"$M_{\rm sp}$")
+    ax2.semilogy(hst['time']*s.u.Myr, hst['Mc']*s.u.Msun, 'b-', label=r"$M_c$")
+    ax2.semilogy(hst['time']*s.u.Myr, hst['Mu']*s.u.Msun, 'g-', label=r"$M_u$")
+    ax2.semilogy(hst['time']*s.u.Myr, hst['Mw']*s.u.Msun, 'r-', label=r"$M_w$")
+    ax2.semilogy(hst['time']*s.u.Myr, hst['mass']*s.u.Msun, 'k-', label=r"$M_{\rm tot}$")
+    ax2.semilogy(hst['time']*s.u.Myr, hst['msp']*s.u.Msun, 'k--', label=r"$M_{\rm sp}$")
     ax2.set_ylabel("mass ["+r"${M_\odot}$"+"]")
     ax2.set_ylim(masslim)
     ax2.legend()
@@ -399,51 +399,3 @@ def plt_history(s, fig, savfig=False):
             os.makedirs(savdir)
         fig.savefig(osp.join(savdir, 'history.{0:s}.png'
             .format(s.basename)),bbox_inches='tight')
-
-def mass_flux(s, fig):
-    """
-    Check mass conservation of TIGRESS-GC simulation by measuring the net
-    outflow rate and the total mass of the simulation box.
-    Note that the nozzle inflow is already taken into account in the
-    hst['F2_lower'] and hst['F2_upper'].
-
-    ISSUE: We cannot check mass conservation accurately unless we use very 
-    short time step between the history dump, because we have to time-integrate
-    surface flux numerically - SMOON
-    """
-    # load history file
-    hst = s.read_hst(force_override=True)
-    Lx=s.par['domain1']['x1max']-s.par['domain1']['x1min']
-    Ly=s.par['domain1']['x2max']-s.par['domain1']['x2min']
-    Lz=s.par['domain1']['x3max']-s.par['domain1']['x3min']
-
-    time = hst['time']
-    sfr = hst['sfr10']
-    Mtot = (hst['mass']+hst['msp'])
-    inflow = np.ones(len(time))
-    xflux = (-hst['F1_lower']+hst['F1_upper'])
-    yflux = (-hst['F2_lower']+hst['F2_upper']) + inflow
-    zflux = (-hst['F3_lower']+hst['F3_upper'])
-
-    ax = fig.add_subplot(111)
-    ax.semilogy(time, sfr, 'k-', label='SFR')
-    ax.semilogy(time, xflux, 'b-', label='x1flux')
-    ax.semilogy(time, yflux, 'r-', label='x2flux')
-    ax.semilogy(time, zflux, 'g-', label='x3flux')
-    ax.semilogy(time, inflow, 'k--', label='inflow rate')
-    ax.semilogy(time, sfr+xflux+yflux+zflux, 'k:', label='SFR+fluxes')
-
-def mass_conservation(s, fig):
-    # load history file
-    hst = s.read_hst(force_override=True)
-
-    time = hst['time']
-    sfr = hst['sfr10']
-    Mtot = (hst['mass']+hst['msp'])
-    Msp_left = hst['msp_left']
-    xflux = (-hst['F1_lower']+hst['F1_upper'])
-    yflux = (-hst['F2_lower']+hst['F2_upper'])
-    zflux = (-hst['F3_lower']+hst['F3_upper'])
-    outflow = xflux+yflux+zflux
-    ax.semilogy(time, Mtot, 'k-')
-    ax.semilogy(time, Mtot[0]-outflow*time-Msp_left, 'k--')
