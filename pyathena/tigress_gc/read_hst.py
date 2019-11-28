@@ -30,64 +30,30 @@ class ReadHst:
 
         hst = read_hst(self.files['hst'], force_override=force_override)
 
-        h = pd.DataFrame()
-
-        # Time in code unit
-        h['time_code'] = hst['time']
-        # Time in Myr
-        h['time'] = hst['time']*u.Myr
-
         # Total gas mass in Msun
-        h['mass'] = hst['mass']*vol*u.Msun
-        h['Mh2'] = hst['Mh2']*vol*u.Msun
-        h['Mh1'] = hst['Mh1']*vol*u.Msun
-        h['Mw'] = hst['Mw']*vol*u.Msun
-        h['Mu'] = hst['Mu']*vol*u.Msun
-        h['Mc'] = hst['Mc']*vol*u.Msun
-        h['msp'] = hst['msp']*vol*u.Msun
-        h['msp_left'] = hst['msp_left']*vol*u.Msun
-
-        if self.par['problem']['iflw_flag']==1: #constant inflow rate
-            # Total inflow mass
-            Mdot = (2*self.par['problem']['iflw_d0']*self.par['problem']['iflw_v0']\
-                     *self.par['problem']['iflw_mu']*self.par['problem']['iflw_w']\
-                     *self.par['problem']['iflw_h']*self.u.density*self.u.velocity\
-                     *self.u.length**2).to("Msun/Myr").value
-            h['mdot_in'] = Mdot
-            h['mass_in'] = Mdot*h['time']
-        else:
-            dT = self.par['problem']['iflw_dT']*self.u.Myr
-            h['mass_in'] = 0.55*h['time'] + dT/(2*np.pi)*0.45*np.sin(2*np.pi*h['time']/dT)
+        hst['mass'] *= vol
+        hst['Mh2'] *= vol
+        hst['Mh1'] *= vol
+        hst['Mw'] *= vol
+        hst['Mu'] *= vol
+        hst['Mc'] *= vol
+        hst['msp'] *= vol
+        hst['msp_left'] *= vol
 
         # flux
-        h['F1h2'] = hst['F1h2']*u.Msun/u.Myr
-        h['F1h1'] = hst['F1h1']*u.Msun/u.Myr
-        h['F1w'] = hst['F1w']*u.Msun/u.Myr
-        h['F1u'] = hst['F1u']*u.Msun/u.Myr
-        h['F1c'] = hst['F1c']*u.Msun/u.Myr
-        h['F1_2p'] = h['F1w']+h['F1u']+h['F1c']
-        h['F1'] = h['F1h2']+h['F1h1']+h['F1_2p']
+        hst['F1_2p'] = hst['F1w']+hst['F1u']+hst['F1c']
+        hst['F1'] = hst['F1h2']+hst['F1h1']+hst['F1_2p']
 
-        h['F2h2'] = hst['F2h2']*u.Msun/u.Myr
-        h['F2h1'] = hst['F2h1']*u.Msun/u.Myr
-        h['F2w'] = hst['F2w']*u.Msun/u.Myr
-        h['F2u'] = hst['F2u']*u.Msun/u.Myr
-        h['F2c'] = hst['F2c']*u.Msun/u.Myr
-        h['F2_2p'] = h['F2w']+h['F2u']+h['F2c']
-        h['F2'] = h['F2h2']+h['F2h1']+h['F2_2p']
+        hst['F2_2p'] = hst['F2w']+hst['F2u']+hst['F2c']
+        hst['F2'] = hst['F2h2']+hst['F2h1']+hst['F2_2p']
 
-        h['F3h2'] = hst['F3h2']*u.Msun/u.Myr
-        h['F3h1'] = hst['F3h1']*u.Msun/u.Myr
-        h['F3w'] = hst['F3w']*u.Msun/u.Myr
-        h['F3u'] = hst['F3u']*u.Msun/u.Myr
-        h['F3c'] = hst['F3c']*u.Msun/u.Myr
-        h['F3_2p'] = h['F3w']+h['F3u']+h['F3c']
-        h['F3'] = h['F3h2']+h['F3h1']+h['F3_2p']
+        hst['F3_2p'] = hst['F3w']+hst['F3u']+hst['F3c']
+        hst['F3'] = hst['F3h2']+hst['F3h1']+hst['F3_2p']
 
         # Total outflow mass
-        h['mass_out1'] = integrate.cumtrapz(h['F1'], h['time'], initial=0.0)*Ly*Lz
-        h['mass_out2'] = integrate.cumtrapz(h['F2'], h['time'], initial=0.0)*Lz*Lx
-        h['mass_out3'] = integrate.cumtrapz(h['F3'], h['time'], initial=0.0)*Lx*Ly
+        hst['mass_out1'] = integrate.cumtrapz(hst['F1'], hst['time'], initial=0.0)*Ly*Lz
+        hst['mass_out2'] = integrate.cumtrapz(hst['F2'], hst['time'], initial=0.0)*Lz*Lx
+        hst['mass_out3'] = integrate.cumtrapz(hst['F3'], hst['time'], initial=0.0)*Lx*Ly
 
 #        # Calculate (cumulative) SN ejecta mass
 #        # JKIM: only from clustered type II(?)
@@ -100,15 +66,15 @@ class ReadHst:
 #            pass
 
         # star formation rates [Msun/yr]
-        h['sfr1'] = hst['sfr1']*(Lx*Ly/1e6)
-        h['sfr5'] = hst['sfr5']*(Lx*Ly/1e6)
-        h['sfr10'] = hst['sfr10']*(Lx*Ly/1e6)
-        h['sfr40'] = hst['sfr40']*(Lx*Ly/1e6)
-        h['sfr100'] = hst['sfr100']*(Lx*Ly/1e6)
+        hst['sfr1'] = hst['sfr1']*(Lx*Ly/1e6)
+        hst['sfr5'] = hst['sfr5']*(Lx*Ly/1e6)
+        hst['sfr10'] = hst['sfr10']*(Lx*Ly/1e6)
+        hst['sfr40'] = hst['sfr40']*(Lx*Ly/1e6)
+        hst['sfr100'] = hst['sfr100']*(Lx*Ly/1e6)
 
-        self.hst = h
+        self.hst = hst
 
-        return h
+        return hst
 
     def read_sn(self, savdir=None, force_override=False):
         """Load sn dump"""
