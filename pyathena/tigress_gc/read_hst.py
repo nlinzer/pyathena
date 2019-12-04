@@ -55,15 +55,15 @@ class ReadHst:
         hst['mass_out2'] = integrate.cumtrapz(hst['F2'], hst['time'], initial=0.0)*Lz*Lx
         hst['mass_out3'] = integrate.cumtrapz(hst['F3'], hst['time'], initial=0.0)*Lx*Ly
 
-#        # Calculate (cumulative) SN ejecta mass
-#        # JKIM: only from clustered type II(?)
-#        try:
-#            sn = read_hst(self.files['sn'], force_override=force_override)
-#            t_ = np.array(hst['time'])
-#            Nsn, snbin = np.histogram(sn.time, bins=np.concatenate(([t_[0]], t_)))
-#            h['mass_snej'] = Nsn.cumsum()*self.par['feedback']['MejII'] # Mass of SN ejecta [Msun]
-#        except:
-#            pass
+        # Calculate (cumulative) SN ejecta mass
+        # JKIM: only from clustered type II(?)
+        try:
+            sn = read_hst(self.files['sn'], force_override=force_override)
+            t_ = np.array(hst['time'])
+            Nsn, snbin = np.histogram(sn.time, bins=np.concatenate(([t_[0]], t_)))
+            hst['mass_snej'] = Nsn.cumsum()*self.par['feedback']['MejII'] # Mass of SN ejecta [Msun]
+        except:
+            pass
 
         # star formation rates [Msun/yr]
         hst['sfr1'] = hst['sfr1']*(Lx*Ly/1e6)

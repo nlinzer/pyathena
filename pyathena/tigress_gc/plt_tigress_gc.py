@@ -147,46 +147,22 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     sxymax = 1e3
     sxzmin = 1e-2
     sxzmax = 1e4
-    if "M001_" in s.basename:
-        Mdot = 0.01
-        sfrlim = [1e-3,1e-1]
-        masslim = [1e4,1e6]
-    elif ("M01_" in s.basename)|("L01" in s.basename):
-        Mdot = 0.1
-        sfrlim = [1e-2,1e0]
-        masslim = [1e5,1e7]
-    elif ("M02_" in s.basename)|("L02" in s.basename):
+    if "M02" in s.basename:
         Mdot = 0.2
         sfrlim = [1e-2,1e0]
         masslim = [1e5,1e7]
-    elif ("M1_" in s.basename)|("L1" in s.basename):
+    elif "M1" in s.basename:
         Mdot = 1
         sfrlim = [1e-1,1e1]
         masslim = [1e6,1e8]
-    elif ("M5_" in s.basename)|("L5" in s.basename):
+    elif "M5" in s.basename:
         Mdot = 5
         sfrlim = [1e0,1e2]
         masslim = [1e6,1e8]
-    elif ("M10_" in s.basename)|("L10" in s.basename):
-        Mdot = 10
-        sfrlim = [1e0,1e2]
-        masslim = [1e6,1e8]
-    elif "V10_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']*s.u.Myr/10)
-        sfrlim = [5e-2,5e0]
-        masslim = [5e5,5e7]
-    elif "V50_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']*s.u.Myr/50)
-        sfrlim = [5e-2,5e0]
-        masslim = [5e5,5e7]
-    elif "V100_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']*s.u.Myr/100)
-        sfrlim = [5e-2,5e0]
-        masslim = [5e5,5e7]
-    elif "V200_" in s.basename:
-        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']*s.u.Myr/200)
-        sfrlim = [5e-2,5e0]
-        masslim = [5e5,5e7]
+#    elif "V10_" in s.basename:
+#        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']*s.u.Myr/10)
+#        sfrlim = [5e-2,5e0]
+#        masslim = [5e5,5e7]
     else:
         raise Exception("set appropriate yranges for the model {}".format(s.basename))
 
