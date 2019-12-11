@@ -21,8 +21,8 @@ from ..io.read_hst import read_hst
 from ..io.read_starpar_vtk import read_starpar_vtk
 from ..util.units import Units
 
-from pygc.threshold import LPthres
-lp = LPthres()
+from pygc.threshold import Cooling
+lp = Cooling()
 
 def _get_histogram(s, num):
     # load vtk and hst files
