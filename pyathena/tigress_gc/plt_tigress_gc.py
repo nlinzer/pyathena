@@ -147,18 +147,30 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     sxymax = 1e3
     sxzmin = 1e-2
     sxzmax = 1e4
-    if "M02" in s.basename:
-        Mdot = 0.2
+    if "C0" in s.basename:
+        Mdot = 0.125
         sfrlim = [1e-2,1e0]
         masslim = [1e5,1e7]
-    elif "M1" in s.basename:
-        Mdot = 1
+    elif "C1" in s.basename:
+        Mdot = 0.5
+        sfrlim = [1e-2,1e0]
+        masslim = [1e6,1e8]
+    elif "C2" in s.basename:
+        Mdot = 2
         sfrlim = [1e-1,1e1]
         masslim = [1e6,1e8]
-    elif "M5" in s.basename:
-        Mdot = 5
-        sfrlim = [1e0,1e2]
+    elif "N0" in s.basename:
+        Mdot = 0.125
+        sfrlim = [1e-2,1e0]
         masslim = [1e6,1e8]
+    elif "N1" in s.basename:
+        Mdot = 0.5
+        sfrlim = [1e-2,1e0]
+        masslim = [1e6,1e8]
+    elif "N2" in s.basename:
+        Mdot = 2
+        sfrlim = [1e-1,1e1]
+        masslim = [1e7,1e9]
 #    elif "V10_" in s.basename:
 #        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']*s.u.Myr/10)
 #        sfrlim = [5e-2,5e0]
