@@ -9,12 +9,14 @@ import os
 import time
 import os.path as osp
 import matplotlib as mpl
+from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import xarray as xr
 from astropy import units as au
+from astropy import constants as ac
 
 from ..classic.cooling import coolftn
 from ..io.read_hst import read_hst
@@ -22,36 +24,7 @@ from ..io.read_starpar_vtk import read_starpar_vtk
 from ..util.units import Units
 
 from pygc.cooling import Cooling
-lp = Cooling()
-
-def _get_histogram(s, num):
-    # load vtk and hst files
-    ds = s.load_vtk(num=num)
-    dat = ds.get_field(field=['density','pressure'], as_xarray=True)
-    time = ds.domain['time']*s.u.Myr
-    axis_idx = dict(x=0, y=1, z=2)
-
-    # prepare variables to be plotted
-    dat['pok'] = dat['pressure']*s.u.pok
-    # T_1 = (p/k) / (rho m_p) is the temperature assuming mu=1
-    dat['T1'] = dat['pok']/(dat['density']*s.u.muH)
-    dat['temperature'] = xr.DataArray(coolftn().get_temp(dat['T1'].values),
-            coords=dat['T1'].coords, dims=dat['T1'].dims)
-
-    # phase diagram
-    hist_nP,xedge_nP,yedge_nP = np.histogram2d(
-            np.log10(np.array(dat['density']).flatten()),
-            np.log10(np.array(dat['pok']).flatten()), bins=200,
-            range=[[-3,5],[2,8]],density=True,
-            weights=np.array(dat['density']).flatten())
-    hist_nT,xedge_nT,yedge_nT = np.histogram2d(
-            np.log10(np.array(dat['density']).flatten()),
-            np.log10(np.array(dat['temperature']).flatten()), bins=200,
-            range=[[-3,5],[1,7]],density=True,
-            weights=np.array(dat['density']).flatten())
-
-    return hist_nP, xedge_nP, yedge_nP, hist_nT, xedge_nT, yedge_nT
-
+from pygc.util import add_derived_fields
 
 def mass_norm(mass):
     '''
@@ -60,75 +33,6 @@ def mass_norm(mass):
     '''
     return np.sqrt(mass/300.)
 
-def plt_proj_density(s, num, fig, savfig=True):
-    """
-    Create density projection
-    """
-
-    # create axes
-    gs = GridSpec(1,3,figure=fig)
-    ax1 = fig.add_subplot(gs[0:2])
-    ax2 = fig.add_subplot(gs[2])
-    cax1 = make_axes_locatable(ax1).append_axes('right', size='2.5%', pad=0.05)
-    cax2 = make_axes_locatable(ax2).append_axes('right', size='5%', pad=0.05)
-
-    # load vtk and hst files
-    ds = s.load_vtk(num=num)
-    dat = ds.get_field(field=['density'], as_xarray=True)
-    sp = read_starpar_vtk(s.files['starpar'][num])
-    time = ds.domain['time']*s.u.Myr
-    axis_idx = dict(x=0, y=1, z=2)
-
-    # prepare variables to be plotted
-    dat['surf_xy'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='z')*s.u.Msun/s.u.pc**2
-    dat['surf_xz'] = (dat['density']*ds.domain['dx'][axis_idx['z']]).sum(dim='y')*s.u.Msun/s.u.pc**2
-
-    # plot
-
-    # gas
-    dat['surf_xy'].plot.imshow(ax=ax1, norm=mpl.colors.LogNorm(),
-            cmap='pink_r', vmin=1e0, vmax=1e4, cbar_ax=cax1)
-    dat['surf_xz'].plot.imshow(ax=ax2, norm=mpl.colors.LogNorm(),
-            cmap='pink_r', vmin=1e-2, vmax=1e5, cbar_ax=cax2)
-
-    # starpar
-    young_sp = sp[sp['age']*s.u.Myr < 40.]
-    young_cluster = young_sp[young_sp['mass'] != 0]
-    mass = young_cluster['mass']*s.u.Msun
-    age = young_cluster['age']*s.u.Myr
-    cl = ax1.scatter(young_cluster['x1'], young_cluster['x2'], marker='o',
-                     s=mass_norm(mass), c=age, edgecolor='black', linewidth=1,
-                     vmax=40, vmin=0, cmap=plt.cm.cool_r, zorder=2, alpha=0.5)
-    ax2.scatter(young_cluster['x1'], young_cluster['x3'], marker='o',
-                s=mass_norm(mass), c=age, edgecolor='black', linewidth=1,
-                vmax=40, vmin=0, cmap=plt.cm.cool_r, zorder=2, alpha=0.5)
-    ss=[]
-    label=[]
-    ext = ax1.images[0].get_extent()
-    for mass in [1e4,1e5,1e6]:
-        ss.append(ax1.scatter(ext[1]*2,ext[3]*2,s=mass_norm(mass),color='k',alpha=.5))
-        label.append(r'$10^%d M_\odot$' % np.log10(mass))
-    ax1.set_xlim(ext[0], ext[1])
-    ax1.set_ylim(ext[3], ext[2])
-    ax1.legend(ss,label,scatterpoints=1,loc=2,ncol=3,bbox_to_anchor=(-0.1, 1.065), frameon=False)
-
-    cax = fig.add_axes([0.15,0.93,0.25,0.015])
-    cbar = plt.colorbar(cl, ticks=[0,20,40], cax=cax, orientation='horizontal')
-    cbar.ax.set_title(r'$age\,[\rm Myr]$')
-
-    for ax in [ax1,ax2]:
-        ax.set_aspect('equal')
-
-    # figure annotations
-    fig.suptitle('{0:s}, time: {1:.1f} Myr'.format(s.basename, time), fontsize=30, x=.55, y=.93)
-
-    if savfig:
-        savdir = osp.join('./figures-all')
-        if not os.path.exists(savdir):
-            os.makedirs(savdir)
-        fig.savefig(osp.join(savdir, 'proj-density.{0:s}.{1:04d}.png'
-            .format(s.basename, ds.num)),bbox_inches='tight')
-
 def plt_all(s, num, fig, with_starpar=False, savfig=True):
     """
     Create large plot including density slice, density projection, temperature
@@ -136,10 +40,17 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     """
     # load vtk and hst files
     ds = s.load_vtk(num=num)
-    dat = ds.get_field(field=['density','pressure'], as_xarray=True)
+    dat = ds.get_field(field=['density','pressure'])
     hst = s.read_hst(force_override=True)
-    time = ds.domain['time']*s.u.Myr
+    time_code = ds.domain['time']
+    time = time_code*s.u.Myr
     axis_idx = dict(x=0, y=1, z=2)
+    idx = abs(hst.time-time_code)==abs(hst.time-time_code).min()
+    heat_ratio = hst.loc[idx].heat_ratio
+    column_density = (hst.loc[idx].mass.values*s.u.mass/
+        (s.domain['Lx'][0]*s.domain['Lx'][1]*au.pc**2)/(s.u.muH*ac.m_p)).cgs.value
+    efftau_in = s.par['problem']['efftau']
+    c = Cooling(hr=heat_ratio, dx=s.domain['dx'][0], crNH=column_density, efftau=efftau_in)
 
     dmin = 1e-2
     dmax = 1e3
@@ -180,12 +91,12 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
 
     # create axes
     gs = GridSpec(3,5,figure=fig)
-    ax1 = fig.add_subplot(gs[0,0])               # density slice
-    ax2 = fig.add_subplot(gs[1:,0], sharex=ax1)
-    ax3 = fig.add_subplot(gs[0,1])               # density projection
-    ax4 = fig.add_subplot(gs[1:,1], sharex=ax3)
-    ax5 = fig.add_subplot(gs[0,2])               # temperature slice
-    ax6 = fig.add_subplot(gs[1:,2], sharex=ax5)
+    ax1 = fig.add_subplot(gs[0:2,0:2])
+    ax2 = fig.add_subplot(gs[2,0])
+    ax3 = fig.add_subplot(gs[2,1])
+    ax4 = fig.add_subplot(gs[0,2])
+    ax5 = fig.add_subplot(gs[1,2])
+    ax6 = fig.add_subplot(gs[2,2])
     ax7 = fig.add_subplot(gs[0,3])               # n-P phase diagram
     ax8 = fig.add_subplot(gs[0,4])               # n-T phase diagram
     ax9 = fig.add_subplot(gs[1,3:])              # SFR history
@@ -199,10 +110,7 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
 
     # prepare variables to be plotted
     dat['pok'] = dat['pressure']*s.u.pok
-    # T_1 = (p/k) / (rho m_p) is the temperature assuming mu=1
-    dat['T1'] = dat['pok']/(dat['density']*s.u.muH)
-    dat['temperature'] = xr.DataArray(coolftn().get_temp(dat['T1'].values),
-            coords=dat['T1'].coords, dims=dat['T1'].dims)
+    add_derived_fields(dat, 'T')
     dat['surf_xy'] = ((dat['density']*ds.domain['dx'][axis_idx['z']])
             .sum(dim='z')*s.u.Msun/s.u.pc**2)
     dat['surf_xz'] = ((dat['density']*ds.domain['dx'][axis_idx['z']])
@@ -211,23 +119,23 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
     # plot
 
     # gas
-    (dat['density'].interp(z=0)).plot.imshow(ax=ax1, norm=mpl.colors.LogNorm(),
-            cmap='viridis', vmin=dmin, vmax=dmax, cbar_ax=cax1, add_labels=False,
+    (dat['density'].interp(z=0)).plot.imshow(ax=ax4, norm=LogNorm(),
+            cmap='viridis', vmin=dmin, vmax=dmax, cbar_ax=cax4, add_labels=False,
             cbar_kwargs={'label':r"$n_{\rm H}\,[\rm cm^{-3}]$"})
-    (dat['density'].interp(y=0)).plot.imshow(ax=ax2, norm=mpl.colors.LogNorm(),
-            cmap='viridis', vmin=dmin, vmax=dmax, cbar_ax=cax2, add_labels=False,
+    (dat['density'].interp(y=0)).plot.imshow(ax=ax5, norm=LogNorm(),
+            cmap='viridis', vmin=dmin, vmax=dmax, cbar_ax=cax5, add_labels=False,
             cbar_kwargs={'label':r"$n_{\rm H}\,[\rm cm^{-3}]$"})
-    dat['surf_xy'].plot.imshow(ax=ax3, norm=mpl.colors.LogNorm(), cmap='pink_r',
-            vmin=sxymin, vmax=sxymax, cbar_ax=cax3, add_labels=False,
+    dat['surf_xy'].plot.imshow(ax=ax1, norm=LogNorm(), cmap='pink_r',
+            vmin=sxymin, vmax=sxymax, cbar_ax=cax1, add_labels=False,
             cbar_kwargs={'label':r"$\Sigma_{\rm gas}\,[M_\odot\,\rm pc^{-2}]$"})
-    dat['surf_xz'].plot.imshow(ax=ax4, norm=mpl.colors.LogNorm(), cmap='pink_r',
-            vmin=sxzmin, vmax=sxzmax, cbar_ax=cax4, add_labels=False,
+    dat['surf_xz'].plot.imshow(ax=ax6, norm=LogNorm(), cmap='pink_r',
+            vmin=sxzmin, vmax=sxzmax, cbar_ax=cax6, add_labels=False,
             cbar_kwargs={'label':r"$\Sigma_{\rm gas}\,[M_\odot\,\rm pc^{-2}]$"})
-    (dat['temperature'].interp(z=0)).plot.imshow(ax=ax5, norm=mpl.colors.LogNorm(),
-            cmap='coolwarm', vmin=1e1, vmax=1e8, cbar_ax=cax5, add_labels=False,
+    (dat['T'].interp(z=0)).plot.imshow(ax=ax2, norm=LogNorm(),
+            cmap='coolwarm', vmin=1e1, vmax=1e8, cbar_ax=cax2, add_labels=False,
             cbar_kwargs={'label':r"$T\,[\rm K]$"})
-    (dat['temperature'].interp(y=0)).plot.imshow(ax=ax6, norm=mpl.colors.LogNorm(),
-            cmap='coolwarm', vmin=1e1, vmax=1e8, cbar_ax=cax6, add_labels=False,
+    (dat['T'].interp(y=0)).plot.imshow(ax=ax3, norm=LogNorm(),
+            cmap='coolwarm', vmin=1e1, vmax=1e8, cbar_ax=cax3, add_labels=False,
             cbar_kwargs={'label':r"$T\,[\rm K]$"})
 
     if with_starpar:
@@ -238,18 +146,18 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
             young_cluster = young_sp[young_sp['mass'] != 0]
             mass = young_cluster['mass']*s.u.Msun
             age = young_cluster['age']*s.u.Myr
-            cl = ax3.scatter(young_cluster['x1'], young_cluster['x2'], marker='o',
+            cl = ax1.scatter(young_cluster['x1'], young_cluster['x2'], marker='o',
                              s=mass_norm(mass), c=age, edgecolor='black', linewidth=1,
                              vmax=40, vmin=0, cmap=plt.cm.cool_r, zorder=2)
             ss=[]
             label=[]
-            ext = ax3.images[0].get_extent()
+            ext = ax1.images[0].get_extent()
             for mass in [1e4,1e5,1e6]:
-                ss.append(ax3.scatter(ext[1]*2,ext[3]*2,s=mass_norm(mass),color='k',alpha=.5))
+                ss.append(ax1.scatter(ext[1]*2,ext[3]*2,s=mass_norm(mass),color='k',alpha=.5))
                 label.append(r'$10^%d M_\odot$' % np.log10(mass))
-            ax3.set_xlim(ext[0], ext[1])
-            ax3.set_ylim(ext[3], ext[2])
-            ax3.legend(ss,label,scatterpoints=1,loc=2,ncol=3,bbox_to_anchor=(0.0, 1.2), frameon=False)
+            ax1.set_xlim(ext[0], ext[1])
+            ax1.set_ylim(ext[3], ext[2])
+            ax1.legend(ss,label,scatterpoints=1,loc=2,ncol=3,bbox_to_anchor=(0.0, 1.1), frameon=False)
 
             cax = fig.add_axes([0.15,0.93,0.25,0.015])
             cbar = plt.colorbar(cl, ticks=[0,20,40], cax=cax, orientation='horizontal')
@@ -259,40 +167,50 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
             pass
 
     # phase diagram
-    histnP,xedgnP,yedgnP = np.histogram2d(
-            np.log10(np.array(dat['density']).flatten()),
-            np.log10(np.array(dat['pok']).flatten()), bins=200,
-            range=[[-3,5],[2,8]],density=True,
-            weights=np.array(dat['density']).flatten())
-    histnT,xedgnT,yedgnT = np.histogram2d(
-            np.log10(np.array(dat['density']).flatten()),
-            np.log10(np.array(dat['temperature']).flatten()), bins=200,
-            range=[[-3,5],[1,7]],density=True,
-            weights=np.array(dat['density']).flatten())
-    ax7.imshow(histnP.T, origin='lower', norm=mpl.colors.LogNorm(),
-            extent=[xedgnP[0], xedgnP[-1], yedgnP[0], yedgnP[-1]], cmap='Greys')
-    ax8.imshow(histnT.T, origin='lower', norm=mpl.colors.LogNorm(),
-            extent=[xedgnT[0], xedgnT[-1], yedgnT[0], yedgnT[-1]], cmap='Greys')
+    nHlim = np.array([1e-1, 1e4])
+    Plim = np.array([1e3, 1e7])
+    Tlim = np.array([1e1, 1e5])
+
+    w = dat.density.data.flatten()
+    x = np.log10(w)
+    y = np.log10(dat.pok.data.flatten())
+    myrange = [np.log10(nHlim), np.log10(Plim)]
+    pdf, xedge, yedge = np.histogram2d(x, y, bins=100, range=myrange, weights=w)
+    ax7.pcolormesh(10**xedge, 10**yedge, pdf.T, norm=LogNorm(), cmap='plasma')
     ax7.set_xlabel(r'$n_{\rm H}\,[{\rm cm}^{-3}]$')
     ax7.set_ylabel(r'$P/k_{\rm B}\,[{\rm K\,cm^{-3}}]$')
+
+    y = np.log10(dat.T.data.flatten())
+    myrange = [np.log10(nHlim), np.log10(Tlim)]
+    pdf, xedge, yedge = np.histogram2d(x, y, bins=100, range=myrange, weights=w)
+    ax8.pcolormesh(10**xedge, 10**yedge, pdf.T, norm=LogNorm(), cmap='plasma')
     ax8.set_xlabel(r'$n_{\rm H}\,[{\rm cm}^{-3}]$')
     ax8.set_ylabel(r'$T\,[{\rm K}]$')
 
     # overplot LP threshold
     T = np.logspace(np.log10(12.95), 5)
     dx = s.domain['dx'][0]
-    nth = lp.get_rhoLPeq(dx, T)
-    ax8.plot(np.log10(nth), np.log10(T), 'r--')
-#    ax8.plot(np.log10(10*nth), np.log10(T), 'r--')
-#    ax8.plot(np.log10(100*nth), np.log10(T), 'r--')
-    prs = lp.get_prs(nth, T)
-    ax7.plot(np.log10(nth), np.log10(prs), 'r--')
-#    ax7.plot(np.log10(10*nth), np.log10(prs), 'r--')
-#    ax7.plot(np.log10(100*nth), np.log10(prs), 'r--')
-    ax7.set_xlim([xedgnP[0], xedgnP[-1]])
-    ax7.set_ylim([yedgnP[0], yedgnP[-1]])
-    ax8.set_xlim([xedgnT[0], xedgnT[-1]])
-    ax8.set_ylim([yedgnT[0], yedgnT[-1]])
+    nth = c.get_rhoLPeq(dx, T)
+    ax8.plot(nth, T, 'r--')
+    prs = c.get_prs(nth, T)
+    ax7.plot(nth, prs, 'r--')
+
+    # overplot equilibrium curve
+    nH = np.logspace(-1,4, 100)
+    Teq = np.zeros(len(nH))
+    for i in range(len(nH)):
+        Teq[i] = c.get_Teq(nH[i], fuvle=True, cr=True)
+    Peq = c.get_prs(nH, Teq)
+    ax7.plot(nH, Peq, 'k--')
+    ax8.plot(nH, Teq, 'k--')
+    ax7.set_xscale('log')
+    ax7.set_yscale('log')
+    ax8.set_xscale('log')
+    ax8.set_yscale('log')
+    ax7.set_xlim(nHlim)
+    ax7.set_ylim(Plim)
+    ax8.set_xlim(nHlim)
+    ax8.set_ylim(Tlim)
 
     # history
     ax9.semilogy(hst['time']*s.u.Myr, hst['sfr1'], 'm-', label='sfr1')
