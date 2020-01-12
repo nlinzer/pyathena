@@ -82,6 +82,10 @@ def plt_all(s, num, fig, with_starpar=False, savfig=True):
         Mdot = 2
         sfrlim = [1e-1,1e1]
         masslim = [1e7,1e9]
+    elif "N3" in s.basename:
+        Mdot = 8
+        sfrlim = [1e-1,1e1]
+        masslim = [1e7,1e9]
 #    elif "V10_" in s.basename:
 #        Mdot = 0.55 + 0.45*np.cos(2*np.pi*hst['time']*s.u.Myr/10)
 #        sfrlim = [5e-2,5e0]
