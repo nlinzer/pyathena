@@ -12,7 +12,7 @@ import matplotlib as mpl
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+from mpl_toolkits.axes_grid1 import make_axes_locatable, ImageGrid
 import numpy as np
 import xarray as xr
 from astropy import units as au
@@ -32,6 +32,118 @@ def mass_norm(mass):
     This should be called both in sp_plot and sp_legend for the consistent result
     '''
     return np.sqrt(mass/300.)
+
+def plt_proj(s, num, fig, savfig=True):
+    # load vtk and hst files
+    ds = s.load_vtk(num)
+    dat = ds.get_field('density')
+    add_derived_fields(dat, 'surf')
+    dat['surf_edgeon'] = (dat['density']*ds.domain['dx'][2]).sum(dim='y')
+    try:
+        sp = s.load_starpar_vtk(num)
+        sp['age'] *= s.u.Myr
+        sp['mass'] *= s.u.Msun
+        sp = sp[sp['age'] < 10]
+        flag_sp = True
+    except:
+        print("no star particles are found")
+        flag_sp = False
+
+    if "N0" in s.basename:
+        sxymin = 1e0
+        sxymax = 1e3
+        sxzmin = 1e-1
+        sxzmax = 1e4
+    elif "N1" in s.basename:
+        sxymin = 1e0
+        sxymax = 1e3
+        sxzmin = 1e-1
+        sxzmax = 1e4
+    elif "N2" in s.basename:
+        sxymin = 1e0
+        sxymax = 1e3
+        sxzmin = 1e-1
+        sxzmax = 1e4
+    elif "N3" in s.basename:
+        sxymin = 1e0
+        sxymax = 1e3
+        sxzmin = 1e-1
+        sxzmax = 1e4
+    else:
+        raise Exception("set appropriate yranges for the model {}".format(s.basename))
+
+    # create axes
+    grid = ImageGrid(fig, 111,
+                     nrows_ncols=(2, 2),
+                     axes_pad=0,
+                     label_mode="L",
+                     aspect=True,
+                     share_all=True,
+                     cbar_location="right",
+                     cbar_mode="edge",
+                     direction='row',
+                     cbar_size="4%",
+                     cbar_pad="1%",
+                     )
+
+    # z-projection
+    surf = (dat.surf*s.u.Msun).plot.imshow(ax=grid[0],
+            norm=LogNorm(sxymin,sxymax), cmap='pink_r', add_colorbar=False)
+    (dat.surf*s.u.Msun).plot.imshow(ax=grid[1], norm=LogNorm(sxymin,sxymax),
+            cmap='pink_r', alpha=0.6, add_colorbar=False)
+    if flag_sp:
+        cl = grid[1].scatter(sp['x1'], sp['x2'], marker='o',
+                s=mass_norm(sp.mass), c=sp.age, edgecolor='black',
+                linewidth=0.3, vmax=10, vmin=0, cmap='cool_r', zorder=2,
+                alpha=0.75)
+    else:
+        # Do not remove age colorbar even if no star particles are found
+        cl = grid[1].scatter(2000*np.ones(100), 2000*np.ones(100), marker='o',
+                c=np.linspace(0,10,100), edgecolor='black', linewidth=1,
+                vmax=10, vmin=0, cmap='cool_r')
+    # add legends
+    grid[0].set_ylabel(r'$y\,[{\rm kpc}]$')
+    ss = []
+    label = []
+    for mass in [1e4,1e5,1e6]:
+        ss.append(grid[0].scatter(-2000, 2000, marker='o', s=mass_norm(mass),
+            c='k', linewidth=0.3, alpha=0.75))
+        label.append(r'$10^{:d}\,M_\odot$'.format(int(np.log10(mass))))
+    grid[0].legend(ss, label, scatterpoints=1, loc=2, ncol=3,
+            bbox_to_anchor=(-0.1, 1.2), frameon=False)
+    grid[0].text(400, 900, '{:.1f} Myr'.format(ds.domain['time']*s.u.Myr))
+    
+    # y-projection
+    surfxz = (dat.surf_edgeon*s.u.Msun).plot.imshow(ax=grid[2], cmap='pink_r',
+            norm=LogNorm(sxzmin,sxzmax), add_colorbar=False)
+    (dat.surf_edgeon*s.u.Msun).plot.imshow(ax=grid[3], cmap='pink_r',
+            norm=LogNorm(sxzmin,sxzmax), alpha=0.6, add_colorbar=False)
+    if flag_sp:
+        grid[3].scatter(sp['x1'], sp['x3'], marker='o',
+                s=mass_norm(sp.mass), c=sp.age, edgecolor='black',
+                linewidth=0.3, vmax=10, vmin=0, cmap='cool_r', zorder=2,
+                alpha=0.5)
+    # add legends
+    grid[2].set_xlim(-1000, 1000)
+    grid[2].set_ylim(-1000, 1000)
+    grid[2].set_xlabel(r'$x\,[{\rm kpc}]$')
+    grid[2].set_ylabel(r'$z\,[{\rm kpc}]$')
+    grid[2].set_xticks([-900, -600, -300, 0, 300, 600, 900]);
+    grid[2].set_yticks([-900, -600, -300, 0, 300, 600, 900]);
+    grid[2].set_xticklabels([-0.9, -0.6, -0.3, 0, 0.3, 0.6, 0.9]);
+    grid[2].set_yticklabels([-0.9, -0.6, -0.3, 0, 0.3, 0.6, 0.9]);
+    plt.colorbar(surf, grid.cbar_axes[0], extend='both', label=r'$\Sigma\,[M_\odot\,{\rm pc}^{-2}]$')
+    plt.colorbar(surfxz, grid.cbar_axes[1], extend='both', label=r'$\Sigma\,[M_\odot\,{\rm pc}^{-2}]$')
+    
+    cax = fig.add_axes([0.62, 0.92, 0.25, 0.02])
+    cbar = plt.colorbar(cl, ticks=[0,5,10], cax=cax, orientation='horizontal')
+    cbar.ax.set_title(r'$age\,[\rm Myr]$')
+   
+    if savfig:
+        savdir = osp.join('./figures-all', s.basename)
+        if not os.path.exists(savdir):
+            os.makedirs(savdir)
+        fig.savefig(os.path.join(savdir,'proj.{0:s}.{1:04d}.png'.format(s.basename, num)), bbox_inches='tight')
 
 def plt_all(s, num, fig, with_starpar=False, savfig=True):
     """
