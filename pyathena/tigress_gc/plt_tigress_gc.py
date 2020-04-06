@@ -26,12 +26,12 @@ from ..util.units import Units
 from pygc.cooling import Cooling
 from pygc.util import add_derived_fields
 
-def mass_norm(mass):
+def mass_norm(mass, m0=300.):
     '''
     Mass normlization function to determine symbol size
     This should be called both in sp_plot and sp_legend for the consistent result
     '''
-    return np.sqrt(mass/300.)
+    return np.sqrt(mass/m0)
 
 def plt_proj(s, num, fig, savfig=True):
     # load vtk and hst files
