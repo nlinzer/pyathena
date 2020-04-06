@@ -59,7 +59,7 @@ def plt_proj(s, num, fig, savfig=True):
         sxymax = 1e3
         sxzmin = 1e-1
         sxzmax = 1e4
-    elif "N2" in s.basename:
+    elif ("N2" in s.basename) or ("P" in s.basename):
         sxymin = 1e0
         sxymax = 1e3
         sxzmin = 1e-1

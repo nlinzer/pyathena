@@ -63,7 +63,7 @@ class ReadHst:
             Nsn, snbin = np.histogram(sn.time, bins=np.concatenate(([t_[0]], t_)))
             hst['mass_snej'] = Nsn.cumsum()*self.par['feedback']['MejII'] # Mass of SN ejecta [Msun]
         except:
-            pass
+            raise ValueError("cannot read SN dump")
 
         # star formation rates [Msun/yr]
         hst['sfr1'] = hst['sfr1']*(Lx*Ly/1e6)
