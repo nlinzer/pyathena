@@ -26,6 +26,7 @@ class LoadSim(object):
     find simulation output (vtk, starpar_vtk, hst, sn, zprof) files.
 
     Properties
+    ----------
         basedir : str
             base directory of simulation output
         basename : str
@@ -44,8 +45,13 @@ class LoadSim(object):
             'pyathena' or 'yt' or 'pyathenaclassic'
         num : list of int
             vtk output numbers
+        u : Units object
+            simulation unit
+        dfi : dict
+            derived field information
 
     Methods
+    -------
         load_vtk() :
             reads vtk file using pythena or yt and returns DataSet object
         load_starpar_vtk() :
@@ -55,9 +61,9 @@ class LoadSim(object):
     """
 
     def __init__(self, basedir, savdir=None, load_method='pyathena',
-                 units=Units(kind='LV', muH=1.4271), verbose=False):
-        """
-        The constructor for LoadSim class.
+                 units=Units(kind='LV', muH=1.4271),
+                 verbose=False):
+        """Constructor for LoadSim class.
 
         Parameters
         ----------
@@ -274,8 +280,7 @@ class LoadSim(object):
         
         self.files = dict()
         def find_match(patterns):
-            glob_match = lambda p: \
-                         sorted(glob.glob(osp.join(self.basedir, *p)))
+            glob_match = lambda p: sorted(glob.glob(osp.join(self.basedir, *p)))
                
             for p in patterns:
                 f = glob_match(p)
@@ -325,8 +330,18 @@ class LoadSim(object):
             self.files['athinput'] = fathinput[0]
             self.par = read_athinput(self.files['athinput'])
             self.logger.info('athinput: {0:s}'.format(self.files['athinput']))
-            self.out_fmt = [self.par[k]['out_fmt'] for k in self.par.keys() \
-                            if 'output' in k]
+            # self.out_fmt = [self.par[k]['out_fmt'] for k in self.par.keys() \
+            #                 if 'output' in k]
+            self.out_fmt = []
+            for k in self.par.keys():
+                if 'output' in k:
+                    if self.par[k]['out_fmt'] == 'vtk' and \
+                       not (self.par[k]['out'] == 'prim' or self.par[k]['out'] == 'cons'):
+                        self.out_fmt.append(self.par[k]['id'] + '.' + \
+                                            self.par[k]['out_fmt'])
+                    else:
+                        self.out_fmt.append(self.par[k]['out_fmt'])
+
             self.problem_id = self.par['job']['problem_id']
             self.logger.info('problem_id: {0:s}'.format(self.problem_id))
         else:
@@ -446,6 +461,18 @@ class LoadSim(object):
                 self.logger.warning(
                     'No zprof files are found in {0:s}.'.format(self.basedir))
 
+        # 2d vtk files
+        for fmt in self.out_fmt:
+            if '.vtk' in fmt:
+                fmt = fmt.split('.')[0]
+                patterns = [('id0', '*.????.{0:s}.vtk'.format(fmt)),
+                    ('{0:s}'.format(fmt), '*.????.{0:s}.vtk'.format(fmt))]
+                files = find_match(patterns)
+                self.files[f'{fmt}'] = files
+                setattr(self, f'nums_{fmt}', [int(osp.basename(f).split('.')[1]) \
+                                              for f in self.files[f'{fmt}']])
+
+
         # Find timeit.txt
         ftimeit = find_match(timeit_patterns)
         if ftimeit:
@@ -521,8 +548,8 @@ class LoadSim(object):
         return l
     
     class Decorators(object):
-        """Class containing a collection of decorators for fast reading of analysis
-        output, (reprocessed) hst, and zprof. Used in child class.
+        """Class containing a collection of decorators for prompt reading of analysis
+        output, (reprocessed) hst, and zprof. Used in child classes.
 
         """
         
@@ -539,31 +566,36 @@ class LoadSim(object):
                 kwargs = call_args
 
                 try:
-                    dirname = kwargs['dirname']
+                    prefix = kwargs['prefix']
                 except KeyError:
-                    dirname = '_'.join(read_func.__name__.split('_')[1:])
+                    prefix = '_'.join(read_func.__name__.split('_')[1:])
 
                 if kwargs['savdir'] is not None:
                     savdir = kwargs['savdir']
                 else:
-                    savdir = os.path.join(cls.savdir, dirname)
+                    savdir = osp.join(cls.savdir, prefix)
 
                 force_override = kwargs['force_override']
 
                 # Create savdir if it doesn't exist
-                if not os.path.exists(savdir):
-                    os.makedirs(savdir)
-                    force_override = True
+                try:
+                    if not osp.exists(savdir):
+                        force_override = True
+                        os.makedirs(savdir)
+                except FileExistsError:
+                    print('Directory exists: {0:s}'.format(savdir))
 
-                fpkl = os.path.join(savdir, cls.problem_id +
-                                    '_{0:s}_{1:04d}.p'.format(dirname, kwargs['num']))
-                
-                if not force_override and os.path.exists(fpkl):
+                if 'num' in kwargs:
+                    fpkl = osp.join(savdir, '{0:s}_{1:04d}.p'.format(prefix, kwargs['num']))
+                else:
+                    fpkl = osp.join(savdir, '{0:s}.p'.format(prefix))
+                    
+                if not force_override and osp.exists(fpkl):
                     cls.logger.info('Read from existing pickle: {0:s}'.format(fpkl))
                     res = pickle.load(open(fpkl, 'rb'))
                     return res
                 else:
-                    cls.logger.info('Read original dump.')
+                    cls.logger.info('[check_pickle]: Read original dump.')
                     # If we are here, force_override is True or history file is updated.
                     res = read_func(cls, **kwargs)
                     try:
@@ -581,7 +613,7 @@ class LoadSim(object):
                 if 'savdir' in kwargs:
                     savdir = kwargs['savdir']
                 else:
-                    savdir = os.path.join(cls.savdir, 'hst')
+                    savdir = osp.join(cls.savdir, 'hst')
 
                 if 'force_override' in kwargs:
                     force_override = kwargs['force_override']
@@ -589,22 +621,25 @@ class LoadSim(object):
                     force_override = False
 
                 # Create savdir if it doesn't exist
-                if not os.path.exists(savdir):
-                    os.makedirs(savdir)
-                    force_override = True
+                if not osp.exists(savdir):
+                    try:
+                        os.makedirs(savdir)
+                        force_override = True
+                    except (IOError, PermissionError) as e:
+                        cls.logger.warning('Could not make directory')
 
-                fpkl = os.path.join(savdir,
-                                    os.path.basename(cls.files['hst']) + '.mod.p')
+                fpkl = osp.join(savdir, osp.basename(cls.files['hst']) + '.mod.p')
 
                 # Check if the original history file is updated
-                if not force_override and os.path.exists(fpkl) and \
-                   os.path.getmtime(fpkl) > os.path.getmtime(cls.files['hst']):
-                    cls.logger.info('[read_hst]: Reading from existing pickle.')
+                if not force_override and osp.exists(fpkl) and \
+                   osp.getmtime(fpkl) > osp.getmtime(cls.files['hst']):
+                    cls.logger.info('[read_hst]: Reading pickle.')
+                    #print('[read_hst]: Reading pickle.')
                     hst = pd.read_pickle(fpkl)
                     cls.hst = hst
                     return hst
                 else:
-                    cls.logger.info('[read_hst]: Reading from original hst dump.')
+                    cls.logger.info('[read_hst]: Reading original hst file.')
                     # If we are here, force_override is True or history file is updated.
                     # Call read_hst function
                     hst = read_hst(cls, *args, **kwargs)
@@ -623,9 +658,9 @@ class LoadSim(object):
                 if 'savdir' in kwargs:
                     savdir = kwargs['savdir']
                     if savdir is None:
-                        savdir = os.path.join(cls.savdir, 'zprof')
+                        savdir = osp.join(cls.savdir, 'zprof')
                 else:
-                    savdir = os.path.join(cls.savdir, 'zprof')
+                    savdir = osp.join(cls.savdir, 'zprof')
 
                 if 'force_override' in kwargs:
                     force_override = kwargs['force_override']
@@ -638,7 +673,7 @@ class LoadSim(object):
                     phase = 'whole'
                     
                 # Create savdir if it doesn't exist
-                if not os.path.exists(savdir):
+                if not osp.exists(savdir):
                     os.makedirs(savdir)
                     force_override = True
 
@@ -648,8 +683,8 @@ class LoadSim(object):
                 # Check if the original history file is updated
                 mtime = max([osp.getmtime(f) for f in cls.files['zprof']])
 
-                if not force_override and os.path.exists(fnetcdf) and \
-                   os.path.getmtime(fnetcdf) > mtime:
+                if not force_override and osp.exists(fnetcdf) and \
+                   osp.getmtime(fnetcdf) > mtime:
                     cls.logger.info('[read_zprof]: Read {0:s}'.format(phase) + \
                                     ' zprof from existing NetCDF dump.')
                     ds = xr.open_dataset(fnetcdf)
@@ -693,7 +728,8 @@ class LoadSimAll(object):
                   units=Units(kind='LV', muH=1.4271),
                   verbose=False):
         self.model = model
-        self.sim = LoadSim(self.basedir[model], savdir=savdir,
+        self.sim = LoadSim(self.basedirs[model], savdir=savdir,
                            load_method=load_method,
                            units=units, verbose=verbose)
+        return self.sim
 

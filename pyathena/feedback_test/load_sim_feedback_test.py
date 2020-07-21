@@ -1,12 +1,13 @@
 import os
+import os.path as osp
 import pandas as pd
 
 from ..load_sim import LoadSim
 from ..util.units import Units
 
-from .read_hst import ReadHst
+from .hst import Hst
 
-class LoadSimFeedbackTest(LoadSim, ReadHst):
+class LoadSimFeedbackTest(LoadSim, Hst):
     """LoadSim class for analyzing LoadSimFeedbackTest simulations.
     """
     
@@ -47,13 +48,18 @@ class LoadSimFeedbackTestAll(object):
         # Default models
         if models is None:
             models = dict()
-            models['newcool.n200.M1E3.N128'] = '/perseus/scratch/gpfs/jk11/FEEDBACK-TEST/roe.newcool.n200.M1E3.N128'
 
-        self.models = list(models.keys())
+        # self.models = list(models.keys())
+        self.models = []
         self.basedirs = dict()
         
         for mdl, basedir in models.items():
-            self.basedirs[mdl] = basedir
+            if not osp.exists(basedir):
+                print('[LoadSimFeedbackTestAll]: Model {0:s} doesn\'t exist: {1:s}'.format(
+                    mdl,basedir))
+            else:
+                self.models.append(mdl)
+                self.basedirs[mdl] = basedir
 
     def set_model(self, model, savdir=None, load_method='pyathena', verbose=False):
         

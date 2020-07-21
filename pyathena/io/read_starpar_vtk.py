@@ -49,6 +49,16 @@ def _convert_field_name(name):
         return 'metal_mass[1]'
     elif name == b'star_particle_metal_mass[2]':
         return 'metal_mass[2]'
+    elif name == b'star_particle_metal_mass[3]':
+        return 'metal_mass[3]'
+    elif name == b'star_particle_metal_mass[4]':
+        return 'metal_mass[4]'
+    elif name == b'star_particle_metal_mass[5]':
+        return 'metal_mass[5]'
+    elif name == b'star_particle_metal_mass[6]':
+        return 'metal_mass[6]'
+    elif name == b'star_particle_metal_mass[7]':
+        return 'metal_mass[7]'
 
 def read_starpar_vtk(filename, force_override=False, verbose=False):
     """
@@ -157,7 +167,11 @@ def read_starpar_vtk(filename, force_override=False, verbose=False):
             star[k] = v[idsrt]
 
     # Add time, nstars keys at the end
-    df = pd.DataFrame(star)
+    try:
+        df = pd.DataFrame(star)
+    except:
+        df = pd.DataFrame(index=star.keys())
+        
     df.time = time
     df.nstars = nstars
     try:
