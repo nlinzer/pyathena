@@ -41,16 +41,6 @@ class LoadSimTIGRESSGC(LoadSim, ReadHst): #, ReadZprof, PltHstZprof):
         # Set unit
         self.u = Units(muH=1.4271)
 
-        # Get domain info
-        if self.files['vtk_id0']:
-            self.logger.info('Loading {0:s}'.format(self.files['vtk_id0'][0]))
-            self.ds = self.load_vtk(ivtk=0, id0=True, load_method=load_method)
-        elif self.files['vtk']:
-            self.logger.info('Loading {0:s}'.format(self.files['vtk'][0]))
-            self.ds = self.load_vtk(ivtk=0, id0=False, load_method=load_method)
-        else:
-            self.domain = self.get_domain_from_par(self.par)
-
 class LoadSimTIGRESSGCAll(object):
     """Class to load multiple simulations"""
     def __init__(self, models=None):
