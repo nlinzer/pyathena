@@ -40,20 +40,26 @@ class ReadHst:
         hst['msp'] *= vol
         hst['msp_left'] *= vol
 
-        # flux
-        hst['F1_2p'] = hst['F1w']+hst['F1u']+hst['F1c']
-        hst['F1'] = hst['F1h2']+hst['F1h1']+hst['F1_2p']
+#        # flux
+#        hst['F1_2p'] = hst['F1w']+hst['F1u']+hst['F1c']
+#        hst['F1'] = hst['F1h2']+hst['F1h1']+hst['F1_2p']
+#
+#        hst['F2_2p'] = hst['F2w']+hst['F2u']+hst['F2c']
+#        hst['F2'] = hst['F2h2']+hst['F2h1']+hst['F2_2p']
+#
+#        hst['F3_2p'] = hst['F3w']+hst['F3u']+hst['F3c']
+#        hst['F3'] = hst['F3h2']+hst['F3h1']+hst['F3_2p']
+#
+#        # Total outflow mass
+#        hst['mass_out1'] = integrate.cumtrapz(hst['F1'], hst['time'], initial=0.0)*Ly*Lz
+#        hst['mass_out2'] = integrate.cumtrapz(hst['F2'], hst['time'], initial=0.0)*Lz*Lx
+#        hst['mass_out3'] = integrate.cumtrapz(hst['F3'], hst['time'], initial=0.0)*Lx*Ly
 
-        hst['F2_2p'] = hst['F2w']+hst['F2u']+hst['F2c']
-        hst['F2'] = hst['F2h2']+hst['F2h1']+hst['F2_2p']
-
-        hst['F3_2p'] = hst['F3w']+hst['F3u']+hst['F3c']
-        hst['F3'] = hst['F3h2']+hst['F3h1']+hst['F3_2p']
-
-        # Total outflow mass
-        hst['mass_out1'] = integrate.cumtrapz(hst['F1'], hst['time'], initial=0.0)*Ly*Lz
-        hst['mass_out2'] = integrate.cumtrapz(hst['F2'], hst['time'], initial=0.0)*Lz*Lx
-        hst['mass_out3'] = integrate.cumtrapz(hst['F3'], hst['time'], initial=0.0)*Lx*Ly
+        dmdt_x1 = (-hst['F1_lower']+hst['F1_upper'])*Lx2*Lx3
+        dmdt_x2 = (-hst['F2_lower']+hst['F2_upper'])*Lx3*Lx1
+        dmdt_x3 = (-hst['F3_lower']+hst['F3_upper'])*Lx1*Lx2
+        hst['Mdot_netout'] = (dmdt_x1+dmdt_x2+dmdt_x3)*(u.mass_flux*au.pc**2).to('Msun yr-1').value
+        hst['M_netout'] = cumtrapz(hst.Mdot_netout, x=(hst.time*u.Myr*1e6), initial=0.0)
 
         # Calculate (cumulative) SN ejecta mass
         # JKIM: only from clustered type II(?)
@@ -62,6 +68,11 @@ class ReadHst:
             t_ = np.array(hst['time'])
             Nsn, snbin = np.histogram(sn.time, bins=np.concatenate(([t_[0]], t_)))
             hst['mass_snej'] = Nsn.cumsum()*self.par['feedback']['MejII'] # Mass of SN ejecta [Msun]
+            Mdot_ej = np.zeros(len(hst.time))
+            for i in range(len(hst.time)-1):
+                Mdot_ej[i] = (hst.mass_snej[i+1]-hst.mass_snej[i])\
+                           /((hst.time[i+1]-hst.time[i])*u.Myr*1e6)
+            hst['Mdot_ej'] = Mdot_ej
         except:
             raise ValueError("cannot read SN dump")
 
