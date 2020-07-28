@@ -40,6 +40,11 @@ class ReadHst:
         hst['msp'] *= vol
         hst['msp_left'] *= vol
 
+        #fix wrong msp_left at restart
+        for i in range(len(hst.time)-1,0,-1):
+            if hst.msp_left[i] < hst.msp_left[i-1]:
+                hst['msp_left'][i:] += hst.msp_left[i-1]
+
 #        # flux
 #        hst['F1_2p'] = hst['F1w']+hst['F1u']+hst['F1c']
 #        hst['F1'] = hst['F1h2']+hst['F1h1']+hst['F1_2p']
