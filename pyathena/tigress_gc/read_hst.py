@@ -24,9 +24,9 @@ class ReadHst:
         # total volume of domain (code unit)
         vol = domain['Lx'].prod()
         # domain length (code unit)
-        Lx = domain['Lx'][0]
-        Ly = domain['Lx'][1]
-        Lz = domain['Lx'][2]
+        Lx1 = domain['Lx'][0]
+        Lx2 = domain['Lx'][1]
+        Lx3 = domain['Lx'][2]
 
         hst = read_hst(self.files['hst'], force_override=force_override)
 
@@ -82,11 +82,11 @@ class ReadHst:
             raise ValueError("cannot read SN dump")
 
         # star formation rates [Msun/yr]
-        hst['sfr1'] = hst['sfr1']*(Lx*Ly/1e6)
-        hst['sfr5'] = hst['sfr5']*(Lx*Ly/1e6)
-        hst['sfr10'] = hst['sfr10']*(Lx*Ly/1e6)
-        hst['sfr40'] = hst['sfr40']*(Lx*Ly/1e6)
-        hst['sfr100'] = hst['sfr100']*(Lx*Ly/1e6)
+        hst['sfr1'] = hst['sfr1']*(Lx1*Lx2/1e6)
+        hst['sfr5'] = hst['sfr5']*(Lx1*Lx2/1e6)
+        hst['sfr10'] = hst['sfr10']*(Lx1*Lx2/1e6)
+        hst['sfr40'] = hst['sfr40']*(Lx1*Lx2/1e6)
+        hst['sfr100'] = hst['sfr100']*(Lx1*Lx2/1e6)
 
         self.hst = hst
 
