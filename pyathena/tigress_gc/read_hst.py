@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 from astropy import units as au
-from scipy import integrate
+from scipy.integrate import cumtrapz
 
 from ..io.read_hst import read_hst
 from ..load_sim import LoadSim
