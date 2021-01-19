@@ -204,22 +204,22 @@ def set_derived_fields_def(par, x0):
     
     # Cooling
     if par['configure']['cooling'] == 'ON':
-        # T [K]
-        f = 'T'
-        if par['configure']['new_cooling'] == 'ON':
-            field_dep[f] = set(['density','pressure','xe','xH2'])
-            def _T(d, u):
-                return d['pressure']/(d['density']*(1.1 + d['xe'] - d['xH2']))/\
-                    (ac.k_B/u.energy_density).cgs.value
-        else:
-            field_dep[f] = set(['temperature'])
-            def _T(d, u):
-                return d['temperature']
-        func[f] = _T
-        label[f] = r'$T\;[{\rm K}]$'
-        cmap[f] = cmap_shift(mpl.cm.RdYlBu_r, midpoint=3./7., name='cmap_T')
-        vminmax[f] = (1e1,1e7)
-        take_log[f] = True
+#        # T [K]
+#        f = 'T'
+#        if par['configure']['new_cooling'] == 'ON':
+#            field_dep[f] = set(['density','pressure','xe','xH2'])
+#            def _T(d, u):
+#                return d['pressure']/(d['density']*(1.1 + d['xe'] - d['xH2']))/\
+#                    (ac.k_B/u.energy_density).cgs.value
+#        else:
+#            field_dep[f] = set(['temperature'])
+#            def _T(d, u):
+#                return d['temperature']
+#        func[f] = _T
+#        label[f] = r'$T\;[{\rm K}]$'
+#        cmap[f] = cmap_shift(mpl.cm.RdYlBu_r, midpoint=3./7., name='cmap_T')
+#        vminmax[f] = (1e1,1e7)
+#        take_log[f] = True
 
         f = 'cool_rate'
         field_dep[f] = set(['cool_rate'])
