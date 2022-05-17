@@ -289,6 +289,28 @@ def coolCI(nH, T, xe, xHI, xH2, xCI):
     return cool3Level_(q01,q10,q02,q20,q12,q21,A10CI_,A20CI_,
                        A21CI_,E10CI_,E20CI_,E21CI_,xCI)
 
+def coolneb(nH, T, xe, xHII, Z_g):
+    aNEB_ = np.array([-0.0050817, 0.00765822, 0.11832144, -0.50515842,
+                      0.81569592,-0.58648172,0.69170381])
+    T4 = T*1e-4
+    lnT4 = np.log(T4)
+    lnT4_2 = lnT4*lnT4
+    lnT4_3 = lnT4_2*lnT4
+    lnT4_4 = lnT4_3*lnT4
+    lnT4_5 = lnT4_4*lnT4
+    lnT4_6 = lnT4_5*lnT4
+    poly_fit = np.power(10.0,
+                        aNEB_[0]*lnT4_6 +
+                        aNEB_[1]*lnT4_5 +
+                        aNEB_[2]*lnT4_4 +
+                        aNEB_[3]*lnT4_3 +
+                        aNEB_[4]*lnT4_2 +
+                        aNEB_[5]*lnT4 + aNEB_[6])
+    f_red = 1/(1.0 + 0.12*np.power(xe*nH*1e-2, 0.38 - 0.12*lnT4))
+    
+    return 3.677602203699553e-21*\
+        Z_g*xHII*xe*nH/np.sqrt(T)*np.exp(-38585.52/T)*poly_fit*f_red
+
 def coolOII(nH, T, xe, xOII):
 
     T4 = T*1e-4
@@ -376,6 +398,32 @@ def coolOI(nH, T, xe, xHI, xH2, xOI):
 
     return cool3Level_(q01, q10, q02, q20, q12, q21, A10OI_, A20OI_,
                        A21OI_, E10OI_, E20OI_, E21OI_, xOI)
+
+def coolHISmith21(nH, T, xe, xHI):
+
+    g1 = 2.0
+    prefactor = 8.62913e-06
+    Tinv = 1.0/T
+    T6 = T*1e-6
+    T6_SQR = T6*T6
+    T6_CUB = T6_SQR*T6
+
+    Upsilon_12_cool = np.where(T6 > 0.3, 3.7354906,
+                               0.616414 + 16.8152*T6 - 32.0571*T6_SQR + 35.5428*T6_CUB)
+    Upsilon_13_cool = np.where(T6 > 0.3, 0.8098996999999998,
+                               0.217382 + 3.92604*T6 - 10.6349*T6_SQR + 13.7721*T6_CUB)
+    Upsilon_14_cool = np.where(T6 > 0.3, 0.3261425,
+                               0.0959324 + 1.89951*T6 - 6.96467*T6_SQR + 10.6362*T6_CUB)
+    Upsilon_15_cool = np.where(T6 > 0.3, 0.16427759999999997,
+                               0.0747075 + 0.670939*T6 - 2.28512*T6_SQR + 3.4796*T6_CUB)
+    
+    # Total = sum_n E1n*exp(-T1n/T)*Upsilon_1n_Cool
+    total = 1.63490e-11*Upsilon_12_cool*np.exp(-118415.6*Tinv) + \
+        1.93766e-11*Upsilon_13_cool*np.exp(-140344.4*Tinv) + \
+        2.04363e-11*Upsilon_14_cool*np.exp(-148019.5*Tinv) + \
+        2.09267e-11*Upsilon_15_cool*np.exp(-151572.0*Tinv)
+    
+    return xHI*nH*xe*prefactor/(g1*np.sqrt(T))*total
 
 
 def coolLya(nH, T, xe, xHI):
@@ -1184,3 +1232,21 @@ def CII_rec_rate(T):
                                            1.634e-06 * np.exp(-1.523e+04/T) )
     return alpha_rr + alpha_dr
 
+
+def get_xn_eq(T, nH, zeta_pi=0.0, zeta_cr=0.0, coll_ion=True):
+    """Function to compute equilibrium neutral fraction
+    """
+    T = np.atleast_1d(T)
+    nH = np.atleast_1d(nH)
+    if coll_ion:
+        zeta_ci = nH*coeff_kcoll_H(T)
+    else:
+        zeta_ci = 0.0
+        
+    zeta_rec = nH*coeff_alpha_rr_H(T)
+
+    aa = 1.0 + zeta_ci/zeta_rec
+    bb = -(2.0 + (zeta_pi + zeta_cr + zeta_ci)/zeta_rec)
+    x = -bb/(2.0*aa)*(1 - (np.lib.scimath.sqrt(1 - 4.0*aa/bb**2)).real)
+    
+    return x
