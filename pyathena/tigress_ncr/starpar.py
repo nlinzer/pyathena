@@ -127,6 +127,7 @@ class StarPar():
         dset['PE'] = xr.concat(PE_pp,dim='time')
         dset['LW'] = xr.concat(LW_pp,dim='time')
         return dset
+
     @staticmethod
     def does_domain_intersect_circle(domain, x, y, r):
         # Reference

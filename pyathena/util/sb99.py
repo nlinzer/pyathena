@@ -1,12 +1,14 @@
 import pathlib
 import xarray as xr
+import os
 import os.path as osp
 import numpy as np
 import astropy.units as au
 import astropy.constants as ac
 import pandas as pd
-from scipy.integrate import simps, trapz
+from scipy.integrate import simps, trapz, cumulative_trapezoid
 from scipy.interpolate import interp1d
+
 from ..microphysics.dust_draine import DustDraine
 
 import matplotlib.pyplot as plt
@@ -17,32 +19,81 @@ local = pathlib.Path(__file__).parent.absolute()
 
 class SB99(object):
     
-    def __init__(self, basename='/projects/EOSTRIKE/SB99/Z1_M1E6/output/',
-                 prefix='Z1_M1E6', logM=6.0, tmax_Myr=100.0):
+    def __init__(self, basedir='/projects/EOSTRIKE/SB99/Z014_M1E6_GenevaV00_dt01',
+                 verbose=True):
+        
         """
         Parameters
         ----------
-        logM : float
-             Mass of a (coeval) cluster in log10 M/Msun
-        tmax_Myr : float
-             Maximum age in Myr
+        basedir : str
+            directory name in which SB99 simulation results are located
+        verbose : bool
+            Print some useful parameters
 
-        Returns
+        Methods
         -------
-        df : pandas DataFrame
+        read_sn()
+        read_rad()        
+        read_wind()
+        read_quanta()
+
         """
         
-        self.logM = logM
-        self.tmax_Myr = tmax_Myr
-        self.basename = basename
-        self.fnames = dict()
-        self.fnames['snr'] = osp.join(self.basename, prefix + '.snr1')
-        self.fnames['power'] = osp.join(self.basename, prefix + '.power1')
-        self.fnames['spectrum'] = osp.join(self.basename, prefix + '.spectrum1')
+        self.basedir = basedir
+        self.verbose = verbose
+
+        self._find_files()
+        self._read_params()
         
-        # self.dfs = self.read_sn()
-        # self.dfw = self.read_wind()
-        # self.rr = self.read_rad()
+    def _find_files(self):
+
+        ff = os.listdir(self.basedir)
+        prefixes = []
+        for f in ff:
+            prefixes.append(f.split('.')[0])
+            
+        most_common = lambda lst: max(set(lst), key=lst.count)
+        self.prefix = most_common(prefixes)
+        
+        self.files = dict()
+        for f in ff:
+            name = f.split('.')[-1][:-1]
+            self.files[name] = osp.join(self.basedir, f)
+
+        return None
+
+    def _read_params(self):
+        """Read some important parameters
+        Full information contained in self.par
+        """
+
+        with open(self.files['output'], 'r') as fp:
+            l = fp.readlines()
+            l = [l_.strip() for l_ in l]
+            l = list(filter(None, l))
+
+        # Set cluster mass
+        self.cont_SF = int(l[3]) > 0
+
+        for i,l_ in enumerate(l):
+            if l_.startswith('LAST GRID POINT:'):
+                self.tmax_Myr = float(l[i+1])/1e6
+            if l_.startswith('TIME STEP FOR PRINTING OUT THE SYNTHETIC SPECTRA:'):
+                self.dt_Myr_spec = float(l[i+1])/1e6
+            
+        if not self.cont_SF:
+            self.logM = np.log10(float(l[5]))
+            if self.verbose:
+                print('[SB99] Fixed mass', end=' ; ')
+                print('logM:', self.logM)
+        else:
+            self.logM = 0.0
+            self.SFR = float(l[7])
+            if self.verbose:
+                print('continuous SF')
+                print('SFR:', self.SFR)
+
+        self.par = l
         
     def read_sn(self):
         """Function to read snr1 (supernova rate) output
@@ -52,7 +103,7 @@ class SB99(object):
                  'Edot_SN_IB','Einj_SN_IB', 'Mpgen_typ', 'Mpgen_min',
                  'Edot_tot', 'Einj_tot']
         
-        df = pd.read_csv(self.fnames['snr'], names=names, skiprows=7, delimiter='\s+')
+        df = pd.read_csv(self.files['snr'], names=names, skiprows=7, delimiter='\s+')
         for c in df.columns:
             if c == 'time' or c.startswith('Mpgen'):
                 continue
@@ -75,7 +126,9 @@ class SB99(object):
 
         names = ['time','Edot_all','Edot_OB','Edot_RSG','Edot_LBV','Edot_WR','Einj_all',
                  'pdot_all','pdot_OB','pdot_RSG','pdot_LBV','pdot_WR']
-        df = pd.read_csv(self.fnames['power'], names=names, skiprows=7, delimiter='\s+')
+        df = pd.read_csv(self.files['power'], names=names, skiprows=7, delimiter='\s+')
+
+        # Normalize by cluster mass
         for c in df.columns:
             if c == 'time':
                 continue
@@ -84,15 +137,38 @@ class SB99(object):
         df = df.rename(columns={'time': 'time_yr'})
         df['time_Myr'] = df['time_yr']*1e-6
 
-        # Wind terminal velocity
-        for v in ('all', 'OB','RSG', 'LBV', 'WR'):
-            df['Vw_' + v] = (2.0*df['Edot_' + v]/df['pdot_' + v])/1e5
+        # Edot and pdot are given in cgs units
+        # Note that unit of pdot is converted later
         
-        # Move column
+        # Wind terminal velocity [km s-1]
+        Vw_conv = (1.0*au.cm/au.s).to('km s-1')
+        for v in ('all', 'OB','RSG', 'LBV', 'WR'):
+            df['Vw_' + v] = (2.0*df['Edot_' + v]/df['pdot_' + v])*Vw_conv
+
+        # Wind mass loss rate [Msun Myr-1 Msun-1]
+        Mdot_conv = (1.0*au.g/au.s).to('Msun Myr-1').value
+        for v in ('all', 'OB','RSG', 'LBV', 'WR'):
+            df['Mdot_' + v] = df['pdot_' + v] / (df['Vw_' + v]/Vw_conv)*Mdot_conv
+
+        # Momentum injection rate [Msun km s-1 Myr-1 Msun-1]
+        pdot_conv = (1.0*au.g*au.cm/au.s**2).to('Msun km s-1 Myr-1').value
+        for v in ('all', 'OB','RSG', 'LBV', 'WR'):
+            df['pdot_' + v] = df['pdot_' + v]*pdot_conv
+
+        # Time averaged energy, momentum injection rates \int_0^t q dt / \int_0^t dt
+        for v in ('all', 'OB','RSG', 'LBV', 'WR'):
+            df['Edot_' + v + '_avg'] = cumulative_trapezoid(df['Edot_'+v], x=df['time_Myr'], initial=0.0)/\
+                    cumulative_trapezoid(np.repeat(1.0,len(df['time_Myr'])), x=df['time_Myr'], initial=0.0)
+            df['pdot_' + v + '_avg'] = cumulative_trapezoid(df['pdot_'+v], x=df['time_Myr'], initial=0.0)/\
+                    cumulative_trapezoid(np.repeat(1.0,len(df['time_Myr'])), x=df['time_Myr'], initial=0.0)
+            df['Edot_' + v + '_avg'].iloc[0] = df['Edot_' + v + '_avg'].iloc[1]
+            df['pdot_' + v + '_avg'].iloc[0] = df['pdot_' + v + '_avg'].iloc[1]
+
+        # Move time to the first column
         cols = df.columns.tolist()
         cols = cols[-1:] + cols[:-1]
         df = df[cols]
-    
+        
         return df
 
     def read_rad(self):
@@ -107,9 +183,12 @@ class SB99(object):
         df_dust = d.dfa['Rv31']
         f_Cext = interp1d(np.log10(df_dust['lwav']), np.log10(df_dust['Cext']))
         f_Cabs = interp1d(np.log10(df_dust['lwav']), np.log10(df_dust['Cext']*(1.0 - df_dust['albedo'])))
+        f_Crpr = interp1d(np.log10(df_dust['lwav']),
+                          np.log10(df_dust['Cext']*(1.0 - df_dust['albedo']) + \
+                                   (1.0 - df_dust['cos'])*df_dust['Cext']*df_dust['albedo']))
 
-        df = pd.read_csv(self.fnames['spectrum'], skiprows=6, sep='\s+',
-                           names=['time', 'wav', 'logf', 'logfstar', 'logfneb'])
+        df = pd.read_csv(self.files['spectrum'], skiprows=6, sep='\s+',
+                         names=['time', 'wav', 'logf', 'logfstar', 'logfneb'])
         df = df.rename(columns={'time': 'time_yr'})
         df['time_Myr'] = df['time_yr']*1e-6
 
@@ -171,10 +250,12 @@ class SB99(object):
 
                 Cext = dict()
                 Cabs = dict()
+                Crpr = dict()
                 hnu = dict()
                 for k in w.keys():
                     Cext[k] = []
                     Cabs[k] = []
+                    Crpr[k] = []
                     hnu[k] = []
 
             for k in w.keys():
@@ -182,12 +263,15 @@ class SB99(object):
                                simps(10.0**f_J(np.log10(w[k]))*w[k], w[k]))
                 Cabs[k].append(simps(10.0**f_Cabs(np.log10(w[k]))*10.0**f_J(np.log10(w[k]))*w[k], w[k])/ \
                                simps(10.0**f_J(np.log10(w[k]))*w[k], w[k]))
+                Crpr[k].append(simps(10.0**f_Crpr(np.log10(w[k]))*10.0**f_J(np.log10(w[k]))*w[k], w[k])/ \
+                               simps(10.0**f_J(np.log10(w[k]))*w[k], w[k]))
                 hnu[k].append(simps(10.0**f_J(np.log10(w[k])), w[k])/ \
                                simps(10.0**f_J(np.log10(w[k]))*w[k], w[k])*hc_cgs/(1.0*au.eV).cgs.value*1e4)
 
         for k in w.keys():
             Cext[k] = np.array(Cext[k])
             Cabs[k] = np.array(Cabs[k])
+            Crpr[k] = np.array(Crpr[k])
             hnu[k] = np.array(hnu[k])
 
         if i == 0:
@@ -220,22 +304,15 @@ class SB99(object):
         pdot = dict()
         for v in ('tot', 'LyC', 'LW', 'PE', 'OPT', 'UV', 'FUV'):
             pdot[v] = (((L[v]*au.L_sun/ac.c).to('g cm s-2')).to('Msun km s-1 Myr-1')).value
-        
+
         # Luminosity-weighted effective timescale
         # (e-folding timescale if L is decaying exponentially)
         tdecay_lum = dict()
         for k in L.keys():
             tdecay_lum[k] = trapz(L[k]*time_Myr, time_Myr)/trapz(L[k], time_Myr)
 
-        Cext_mean = dict()
-        Cabs_mean = dict()
-        hnu_mean = dict()
-
-        # Luminosity-weighted average cross-section, photon energy
-        for k in Cext.keys():
-            Cext_mean[k] = np.average(Cext[k], weights=L[k])
-            Cabs_mean[k] = np.average(Cabs[k], weights=L[k])
-            hnu_mean[k] = np.average(hnu[k], weights=L[k])
+        # Photoionization cross section, mean energy of photoelectrons
+        from ..microphysics.photx import PhotX,get_sigma_pi_H2
 
         # Photoionization cross section, mean energy of photoelectrons
         from ..microphysics.photx import PhotX,get_sigma_pi_H2
@@ -275,19 +352,70 @@ class SB99(object):
         dhnu_H2_LyC = np.array(dhnu_H2_LyC)
         sigma_pi_H = np.array(sigma_pi_H)
         sigma_pi_H2 = np.array(sigma_pi_H2)
-        
+       
         r = dict(df=df, df_dust=df_dust,
                  time_yr=time, time_Myr=time_Myr,
                  wav=wav, logf=logf, logM=self.logM,
                  L=L, pdot=pdot, tdecay_lum=tdecay_lum,
                  wav0=wav0, wav1=wav1, wav2=wav2, wav3=wav3,
-                 Cabs=Cabs, Cext=Cext, hnu=hnu,
+                 Cabs=Cabs, Cext=Cext, Crpr=Crpr, hnu=hnu,
                  hnu_LyC=hnu_LyC, dhnu_H_LyC=dhnu_H_LyC, dhnu_H2_LyC=dhnu_H2_LyC,
-                 sigma_pi_H=sigma_pi_H, sigma_pi_H2=sigma_pi_H2,
-                 Cabs_mean=Cabs_mean, Cext_mean=Cext_mean, hnu_mean=hnu_mean)
+                 sigma_pi_H=sigma_pi_H, sigma_pi_H2=sigma_pi_H2)
 
+        # Photon luminosity
+        r['Q'] = dict()
+        Q_conv = (1.0*ac.L_sun/au.eV).cgs.value
+        for k in r['hnu'].keys():
+            r['Q'][k] = r['L'][k]/r['hnu'][k]*Q_conv        
+
+        # Compute time-averaged quantities: q_avg = \int_0^t q * weight dt / \int_0^t weight dt, where weight=1, L, Q
+        for kk in ['L','Q']:
+            r[kk+'_avg'] = dict()
+            for k in r[kk].keys():
+                r[kk+'_avg'][k] = cumulative_trapezoid(r[kk][k], x=r['time_Myr'], initial=0.0)/\
+                                cumulative_trapezoid(np.repeat(1.0,len(r['time_Myr'])), x=r['time_Myr'], initial=0.0)
+                r[kk+'_avg'][k][0] = r[kk+'_avg'][k][1]
+
+        for kk in ['hnu','Cabs','Cext','Cext']:
+            r[kk+'_Lavg'] = dict()
+            for k in r[kk].keys():
+                r[kk+'_Lavg'][k] = cumulative_trapezoid(r[kk][k]*r['L'][k], x=r['time_Myr'], initial=0.0)/\
+                                cumulative_trapezoid(r['L'][k], x=r['time_Myr'], initial=0.0)
+                r[kk+'_Lavg'][k][0] = r[kk+'_Lavg'][k][1]
+
+        for kk in ['hnu','Cabs','Cext','Cext']:
+            r[kk+'_Qavg'] = dict()
+            for k in r[kk].keys():
+                r[kk+'_Qavg'][k] = cumulative_trapezoid(r[kk][k]*r['Q'][k], x=r['time_Myr'], initial=0.0)/\
+                                cumulative_trapezoid(r['Q'][k], x=r['time_Myr'], initial=0.0)
+                r[kk+'_Qavg'][k][0] = r[kk+'_Qavg'][k][1]
+
+        # Q-weighted average for quantities related to ionizing radiation
+        for k in ['dhnu_H_LyC','dhnu_H2_LyC','sigma_pi_H','sigma_pi_H2']:
+            r[k+'_Qavg'] = cumulative_trapezoid(r[k]*r['Q']['LyC'], x=r['time_Myr'], initial=0.0)/\
+                cumulative_trapezoid(r['Q']['LyC'], x=r['time_Myr'], initial=0.0)
+            r[k+'_Qavg'][0] = r[k+'_Qavg'][1]
+            
         return r
 
+    def read_quanta(self):
+        """Function to read ionizing photon rate
+        """
+        names = ['time_yr', 'Q_HI', 'Lfrac_HI', 'Q_HeI', 'Lfrac_HeI',
+                 'Q_HeII', 'Lfrac_HeII', 'logL']
+        df = pd.read_csv(self.files['quanta'], names=names, skiprows=7, delimiter='\s+')
+        df['time_Myr'] = df['time_yr']*1e-6
+        
+        # Normalize by cluster mass
+        for c in df.columns:
+            if c.startswith('time') or c.startswith('Lfrac'):
+                continue
+            df[c] = 10.0**(df[c] - self.logM)
+
+        # for c in names[1:]:
+        #     df[c] = 10.0**df[c]
+
+        return df
 
     @staticmethod
     def plt_spec_sigmad(rr, lambda_Llambda=False, plt_isrf=True, tmax=50.0, nstride=10):
@@ -301,16 +429,16 @@ class SB99(object):
 
         if plt_isrf:
             fig, axes = plt.subplots(3, 2, figsize=(12, 12),
-                                     gridspec_kw=dict(width_ratios=(0.98,0.02), 
+                                     gridspec_kw=dict(width_ratios=(0.98,0.02),
                                                       height_ratios=(1/3.0,1/3.0,1/3.0),
-                                                      wspace=0.05, hspace=0.13),)
+                                                      wspace=0.05, hspace=0.11),)
         else:
             fig, axes = plt.subplots(2, 2, figsize=(12, 9),
-                                     gridspec_kw=dict(width_ratios=(0.98,0.02), 
+                                     gridspec_kw=dict(width_ratios=(0.98,0.02),
                                                       height_ratios=(0.65,0.35),
-                                                      wspace=0.05, hspace=0.01),)            
+                                                      wspace=0.05, hspace=0.01),)
 
-        # Dust opacity first
+        # Dust opacity
         irow = 0
         plt.sca(axes[irow,0])
         plt.tick_params(right=False, which='both', axis='y')
@@ -320,7 +448,7 @@ class SB99(object):
         df = d.dfa['Rv31']
         plt.semilogy(df.lwav*1e4, df.Cext/muH, c='k', label='ext')
         plt.semilogy(df.lwav*1e4, df.kappa_abs, c='k', ls='--', label='abs')
-        plt.xlim(*(axes[0,0].get_xlim()))
+        plt.xlim(1e2,2068)
         plt.ylim(1e2,2.5e3)
         plt.ylabel(r'$\kappa_{\rm d}\;[{\rm cm}^2\,{\rm g}^{-1}]$')
         plt.legend()
@@ -353,12 +481,15 @@ class SB99(object):
         sax0.set_xlabel(r'$h\nu\;[{\rm eV}]$', labelpad=10)
         # secax.tick_params(axis='x', which='major', pad=15)
 
-        ytext = 2e3
+        ytext = 1.8e3
         plt.annotate('LyC', ((912+plt.gca().get_xlim()[0])*0.5,ytext),
                      xycoords='data', ha='center')
         plt.annotate('LW', ((912+1108)*0.5,ytext), xycoords='data', ha='center')
         plt.annotate('PE', ((1108+2068)*0.5,ytext), xycoords='data', ha='center')
         
+        plt.sca(axes[irow,1])
+        plt.axis('off')
+
         irow += 1
         plt.sca(axes[irow,0])
         norm = mpl.colors.Normalize(0.0, tmax)
@@ -385,13 +516,9 @@ class SB99(object):
             plt.ylim(1e28, 1e35)
         
         plt.yscale('log')
-        plt.ylabel(r'$L_{\lambda}/M_{\ast}\;[{\rm erg}\,{\rm s}^{-1}\,\AA^{-1}]$')
+        plt.ylabel(r'$L_{\lambda}/M_{\ast}\;[{\rm erg}\,{\rm s}^{-1}\,\AA^{-1}\,M_{\odot}^{-1}]$')
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=Normalize(0, tmax))
         plt.colorbar(sm, cax=axes[irow,1], label=r'$t_{\rm age}\;[{\rm Myr}]$')
-            
-
-        plt.sca(axes[irow,1])
-        plt.axis('off')
 
         for ax in axes[:,0]:
             plt.sca(ax)
@@ -446,7 +573,7 @@ class SB99(object):
                  label=r'${\rm LyC}\;(<912\,{\rm \AA})$', c='C0', ls='-')
         plt.plot(rr['time_Myr'], (rr['L']['UV']*au.L_sun/ac.c/au.M_sun).to('km s-1 Myr-1'),
                  label=r'${\rm LyC+FUV}\;(<2068\,{\rm \AA})$', c='k', ls='--')
-        plt.plot(rw['time_Myr'], (rw['pdot_all'].values*au.dyne/au.M_sun).to('km s-1 Myr-1'),
+        plt.plot(rw['time_Myr'], rw['pdot_all'].values,
                  label=r'$\dot{p}_{\rm wind}/M_{\ast}$', c='C7')
         plt.xlim(0,20)
         plt.ylim(1e-1,5e1)
@@ -461,7 +588,6 @@ class SB99(object):
     @staticmethod
     def plt_lum_cumul(ax, rr, rw, rs, normed=True, plt_sn=False):
 
-        from scipy.integrate import cumulative_trapezoid
         integrate_L_cum = lambda L, t: cumulative_trapezoid((L*au.L_sun).cgs.value, 
                                                             (t*au.yr).cgs.value, initial=0.0)
 
@@ -504,9 +630,8 @@ class SB99(object):
         return ax
 
     @staticmethod
-    def plt_pdot_cumul(ax, rr, rw, rs, normed=True, plt_sn=False):
+    def plt_pdot_cumul(ax, rr, rw, rs, normed=False, plt_sn=False):
 
-        from scipy.integrate import cumulative_trapezoid
         integrate_pdot = lambda pdot, t: cumulative_trapezoid(
             pdot, t*au.Myr, initial=0.0)
 
@@ -572,10 +697,11 @@ class SB99(object):
         return fig
 
 
-def plt_nuJnu_mid_plane_parallel(ax, Sigma_gas=10.0*au.M_sun/au.pc**2, plt_dr78=True):
+def plt_nuJnu_mid_plane_parallel(ax,
+                                 Sigma_gas=10.0*au.M_sun/au.pc**2, plt_dr78=True):
 
-    sb2 = SB99('/projects/EOSTRIKE/SB99/Z1_SFR1/output/', prefix='Z1_SFR1', logM=0.0)
-    rr = sb2.read_rad()
+    sb = SB99('/projects/EOSTRIKE/SB99/Z014_SFR1_GenevaV00_dt20')
+    rr = sb.read_rad()
     w = rr['wav'].values*1e-4
     d = DustDraine()
     dfdr = d.dfa['Rv31']
@@ -601,18 +727,78 @@ def plt_nuJnu_mid_plane_parallel(ax, Sigma_gas=10.0*au.M_sun/au.pc**2, plt_dr78=
     Jlambda0 = (Llambda/area/4.0).to('erg s-1 cm-2 angstrom-1')
     
     plt.sca(ax)
-    l, = plt.loglog(rr['wav'], rr['wav']*Jlambda, label=r'OML+10')
-    plt.loglog(rr['wav'], rr['wav']*Jlambda0, c=l.get_color(), alpha=0.5, ls='--', label=r'OML+10 w/o atten.')
+    l, = plt.loglog(rr['wav'], #rr['wav']*
+                    Jlambda, label=r'SB99 + Ostriker et al. (2010)')
+    plt.loglog(rr['wav'], #rr['wav']*
+               Jlambda0, c=l.get_color(), alpha=0.5, ls='--', label=r'')
     
     if plt_dr78:
         from pyathena.util import rad_isrf
         wav2 = np.logspace(np.log10(912), np.log10(2068), 1000)*au.angstrom
         nu2 = (ac.c/wav2).to('Hz')
         E = (nu2*ac.h).to('eV')
-        plt.semilogy(wav2, rad_isrf.nuJnu_Dr78(E), label='Draine78')
+        # Note that J_lambda = nuJnu/lambda
+        plt.semilogy(wav2, rad_isrf.nuJnu_Dr78(E)/wav2, label='Draine (1978)')
         #plt.loglog(wav2, nu2*rad_isrf.Jnu_MMP83(wav2), c='C1', label='Mathis+83')
 
-    plt.legend(loc=2)    
-    plt.xlim(1e2,1e4)
-    plt.ylim(1e-5,3e-3)
-    plt.ylabel(r'$\lambda J_{\lambda}\;[{\rm erg\,{\rm s}^{-1}\,{\rm cm}^{-2}\,{\rm sr}^{-1}}]$')
+    plt.legend(loc=4)
+    plt.xlim(1e2,2068)
+    plt.xscale('linear')
+    plt.ylim(1e-8,5e-6)
+    plt.ylabel(r'$J_{\lambda}\;[{\rm erg}\,{\rm s}^{-1}\,{\rm cm}^{-2}\,{\rm sr}^{-1}\AA^{-1}]$')
+
+    return None
+
+def print_lum_weighted_avg_quantities(rr, tmax=50.0):
+    """Function to print some useful numbers for radiation
+    """
+    L_tot = rr['L']['tot']
+    L_LyC = rr['L']['LyC']
+    L_PE = rr['L']['PE']
+    L_LW = rr['L']['LW']
+    L_OPT = rr['L']['OPT']
+    time = rr['time_yr']
+    print('Luminosity-weighted timescale \int t*L dt/\int L dt:',rr['tdecay_lum'])
+    print('Bolometric at t=0:', L_tot[0], L_tot.max(), time[L_tot==L_tot.max()][0]/1e6)
+    print('Bolometric at maximum:', L_tot.max())
+    print('Time at maximum of Bolometric:', time[L_tot==L_tot.max()][0]/1e6)
+
+    print('Lyman Continuum')
+    idx = L_LyC.cumsum()/L_LyC.cumsum()[-1] > 0.5
+    print('- 50% of LyC photons are emitted in the first', time[idx][0]/1e6,'Myr')
+    idx = L_LyC.cumsum()/L_LyC.cumsum()[-1] > 0.90
+    print('- 90% of LyC photons are emitted in the first', time[idx][0]/1e6,'Myr')
+    idx = L_LyC.cumsum()/L_LyC.cumsum()[-1] > 0.95
+    print('- 95% of LyC photons are emitted in the first', time[idx][0]/1e6,'Myr')
+    idx = L_LyC/L_LyC[0] < 0.5
+    print('- 50% of the initial value at',time[idx][0]/1e6, 'Myr')
+
+    print('FUV (LW+PE)')
+    L_FUV = L_PE + L_LW
+    idx = (L_FUV).cumsum()/L_FUV.cumsum()[-1] > 0.5
+    print('- 50% of FUV photons are emitted in the first', time[idx][0]/1e6,'Myr')
+    idx = (L_FUV).cumsum()/L_FUV.cumsum()[-1] > 0.9
+    print('- 90% of FUV photons are emitted in the first', time[idx][0]/1e6,'Myr')
+    idx = (L_FUV).cumsum()/L_FUV.cumsum()[-1] > 0.95
+    print('- 95% of FUV photons are emitted in the first', time[idx][0]/1e6,'Myr')
+    idx = L_FUV/L_FUV[0] < 0.5
+    print('- 50% of the initial value at',time[idx][0]/1e6, 'Myr')
+    
+    idx = rr['time_Myr'] < tmax
+    for k in ['LyC','LW','PE','OPT']:
+        print(k, ':')
+        print('Cabs Cext Crpr hnu : {0:5.2e}, {1:5.2e}, {2:5.2e} {3:5.2e}'.format(
+            np.average(rr['Cabs'][k][idx], weights=rr['L'][k][idx]),
+            np.average(rr['Cext'][k][idx], weights=rr['L'][k][idx]),
+            np.average(rr['Crpr'][k][idx], weights=rr['L'][k][idx]),
+            np.average(rr['hnu'][k][idx], weights=rr['L'][k][idx])
+        ))
+        if k == 'LyC':
+            print('sigma_pi_H dhnu_H {0:5.2e}, {1:5.2e}'.format(
+                np.average(rr['sigma_pi_H'][idx], weights=rr['L'][k][idx]),
+                np.average(rr['dhnu_H_LyC'][idx], weights=rr['L'][k][idx])
+                  ))
+            print('sigma_pi_H2 dhnu_H2 {0:5.2e}, {1:5.2e}'.format(
+                np.average(rr['sigma_pi_H2'][idx], weights=rr['L'][k][idx]),
+                np.average(rr['dhnu_H2_LyC'][idx], weights=rr['L'][k][idx])
+                  ))
