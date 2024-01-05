@@ -133,11 +133,11 @@ def scatter_sp(sp, ax, dim, cmap=plt.cm.cool_r,
                        s=spm.iloc[iyoung], c=spa.iloc[iyoung],
                        marker=marker, edgecolors=edgecolors, linewidths=linewidths,
                        vmin=0, vmax=agemax, cmap=cmap, alpha=alpha)
-            if not plt_old:
-                ax.scatter(spx.iloc[iyoung2], spy.iloc[iyoung2],
-                           s=spm.iloc[iyoung2], c='grey',
-                           marker=marker, edgecolors=edgecolors, linewidths=linewidths,
-                           alpha=alpha)
+            # if not plt_old:
+            #     ax.scatter(spx.iloc[iyoung2], spy.iloc[iyoung2],
+            #                s=spm.iloc[iyoung2], c='grey',
+            #                marker=marker, edgecolors=edgecolors, linewidths=linewidths,
+            #                alpha=alpha)
 
 
 def legend_sp(ax, norm_factor, mass=[1e2, 1e3], location="top", fontsize='medium',
